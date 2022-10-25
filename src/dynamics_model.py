@@ -1,7 +1,9 @@
+import math 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math 
+
+
 class MLP(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers=1,activation=nn.ReLU):
         super(MLP, self).__init__()
