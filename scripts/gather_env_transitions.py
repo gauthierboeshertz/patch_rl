@@ -1,12 +1,5 @@
-from operator import ne
-import sys
 import argparse
-import importlib
-import os
-from textwrap import wrap
 
-from moog import env_wrappers
-from moog import observers
 from moog import environment
 from moog.env_wrappers import gym_wrapper
 from moog_demos.example_configs import bouncing_sprites
@@ -19,10 +12,10 @@ def gather_env_transitions(env,num_transitions,data_name="data"):
     states, actions, rewards, next_states, dones = [],[],[],[],[]
     
     state = env.reset()
-    
     for _ in tqdm(range(num_transitions)):
-        action = env.action_space.sample()
-        next_state, reward, done, info = env.step(action)
+        action = env.action_space.sample() # Should keep the action for some timestep?
+        
+        next_state, reward, done, _ = env.step(action)
         states.append(state)
         actions.append(action)
         rewards.append(reward)
@@ -45,7 +38,7 @@ def gather_env_transitions(env,num_transitions,data_name="data"):
 def main(config):
     
     set_random_seed(config["seed"])
-    episode_timesteps = 50
+    episode_timesteps = 100
     env_config = bouncing_sprites.get_config(num_sprites=config["num_sprites"],is_demo=False,timeout_steps=episode_timesteps, 
                                                             sparse_reward=True,
                                                             one_sprite_mover=config["one_sprite_mover"],
@@ -59,7 +52,7 @@ def main(config):
     
     if config["visual_obs"]:
         gym_env = wrappers.FrameStack(gym_env,3)
-    data_name = "transition_data/{}transitions_{}_{}_{}".format(config["num_transitions"],config["num_sprites"],("all_sprite_mover"if config["all_sprite_mover"] else "one_sprite_mover" if config["one_sprite_mover"] else "select_move"),config["random_init_places"])
+    data_name = "../data/{}_{}transitions_{}_{}_{}".format("visual" if config["visual_obs"] else "states",config["num_transitions"],config["num_sprites"],("all_sprite_mover"if config["all_sprite_mover"] else "one_sprite_mover" if config["one_sprite_mover"] else "select_move"),config["random_init_places"])
     print("Data name",data_name)
     gather_env_transitions(gym_env,config["num_transitions"],data_name=data_name)
     
