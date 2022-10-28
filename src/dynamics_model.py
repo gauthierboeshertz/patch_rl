@@ -20,8 +20,6 @@ class AttentionDynamicsModel(nn.Module):
         
         patches, action = x[0], x[1]
         
-        print(type(patches))
-        print(type(action))
         """
         if self.object_disentanglement:
             obj_x = torch.zeros(x.shape[0],len(self.object_disentanglement),self.action_dim).to(x.device)

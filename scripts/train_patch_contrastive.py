@@ -18,14 +18,15 @@ logger = logging.getLogger(__name__)
 def train(model, train_dataloader, val_dataloader, num_epochs):
     info_bar = Bar('Training', max=num_epochs)
     min_val_loss = 100000
+    
     for epoch in range(num_epochs):
-        spr_train_loss,inverse_train_loss = model.train_epoch(train_dataloader)
-        spr_val_loss, inverse_val_loss = model.val_epoch(val_dataloader)         
-        short_epoch_info = "Epoch: {},  train Loss: {}, Val Loss: {}".format(epoch,spr_train_loss+inverse_train_loss,spr_val_loss +inverse_val_loss)   
+        spr_train_loss = model.train_epoch(train_dataloader)
+        spr_val_loss = model.val_epoch(val_dataloader)         
+        short_epoch_info = "Epoch: {},  train Loss: {}, Val Loss: {}".format(epoch,spr_train_loss,spr_val_loss )   
         
-        epoch_info = "Epoch: {},TRAIN : SPR Loss: {}, Inverse loss: {} ||   VAL : SPR Loss: {}, Inverse Loss {}".format(epoch,spr_train_loss,inverse_train_loss, spr_val_loss, inverse_val_loss)
+        epoch_info = f"Epoch: {epoch},TRAIN : SPR Loss: {spr_train_loss} ||   VAL : SPR Loss: {spr_val_loss}"
         logger.info(epoch_info)
-        val_loss = spr_val_loss + inverse_val_loss
+        val_loss = spr_val_loss 
         if min_val_loss > val_loss:
             min_val_loss = val_loss
             model.save_models()
