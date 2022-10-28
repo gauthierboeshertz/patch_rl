@@ -85,15 +85,11 @@ class SequenceImageTransitionDataset(Dataset):
         cut_episodes = []
         for ep in episodes:
             cut_episodes.append(ep[:-self.sequence_length])
-        print(len(episodes))
-        print(len(cut_episodes))
         return [item for sublist in cut_episodes for item in sublist] #flatten list to get indices
 
-        
     def __len__(self):
         return  len(self.valid_transitions_indices)
             
-
             
     def __getitem__(self, idx):
         

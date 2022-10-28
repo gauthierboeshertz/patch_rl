@@ -22,15 +22,15 @@ model:
     device: "cpu"
 
 env:
-    num_transitions: 180
+    num_transitions: 50000
     num_sprites: 2
     all_sprite_mover: True
     random_init_places: False
 
 train_loop:
-    batch_size: 32
+    batch_size: 64
     num_epochs: 50
-    num_workers: 0
+    num_workers: 2
 
 hydra:
     run:

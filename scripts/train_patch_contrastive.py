@@ -5,7 +5,11 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 import logging
+
 from stable_baselines3.common.utils import set_random_seed
+set_random_seed(0)
+
+
 from progress.bar import Bar
 import os
 from src.patch_contrastive_model import PatchContrastiveModel
@@ -14,14 +18,43 @@ from hydra.utils import get_original_cwd, to_absolute_path
 
 logger = logging.getLogger(__name__)
 
+def train_epoch(model, dataloader):
+    model.forward_model.train()
+    model.encoder.train()
+    epoch_loss = 0
+    for _, batch in enumerate(dataloader):
+        
+        loss = model.process_recursive_batch(batch)
+        loss.backward()
+        epoch_loss += loss.item()
+        model.encoder_optimizer.step()
+        model.forward_optimizer.step()
+        model.update_targets()
+        
+    return epoch_loss/len(dataloader)
+
+def val_epoch(model,dataloader):
+    model.encoder.eval()
+    model.forward_model.eval()
+    
+    epoch_loss = 0
+    with torch.no_grad():
+        for _, batch in enumerate(dataloader):
+            loss = model.process_recursive_batch(batch)
+            epoch_loss += loss.item()
+            
+
+    return epoch_loss/len(dataloader)
+                
+
 
 def train(model, train_dataloader, val_dataloader, num_epochs):
     info_bar = Bar('Training', max=num_epochs)
     min_val_loss = 100000
     
     for epoch in range(num_epochs):
-        spr_train_loss = model.train_epoch(train_dataloader)
-        spr_val_loss = model.val_epoch(val_dataloader)         
+        spr_train_loss = train_epoch(model,train_dataloader)
+        spr_val_loss = model.val_epoch(model,val_dataloader)         
         short_epoch_info = "Epoch: {},  train Loss: {}, Val Loss: {}".format(epoch,spr_train_loss,spr_val_loss )   
         
         epoch_info = f"Epoch: {epoch},TRAIN : SPR Loss: {spr_train_loss} ||   VAL : SPR Loss: {spr_val_loss}"

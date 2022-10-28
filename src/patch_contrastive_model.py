@@ -114,7 +114,7 @@ class PatchContrastiveModel:
         
     def process_recursive_batch(self, batch):
     
-        obs, action, next_obs, rewards = batch
+        obs, action, _, _ = batch
         
         obs = obs.to(self.device)
         action = action.to(self.device)
@@ -161,7 +161,7 @@ class PatchContrastiveModel:
             loss = self.process_recursive_batch(batch)
             loss.backward()
             
-            
+            epoch_loss += loss.item()
             self.encoder_optimizer.step()
             self.forward_optimizer.step()
             self.update_targets()
@@ -171,7 +171,6 @@ class PatchContrastiveModel:
     def val_epoch(self,val_dataloader):
         self.encoder.eval()
         self.forward_model.eval()
-        self.inverse_model.eval()
         
         epoch_loss = 0
         with torch.no_grad():
@@ -184,5 +183,9 @@ class PatchContrastiveModel:
 
         return epoch_loss/len(val_dataloader)
             
-        
+    def save_models(self):
+            
+        torch.save(self.encoder.state_dict(), "encoder.pt")
+        torch.save(self.forward_model.state_dict(), "forward_model.pt")
+
     
