@@ -18,43 +18,41 @@ from hydra.utils import get_original_cwd, to_absolute_path
 
 logger = logging.getLogger(__name__)
 
-def train_epoch(model, dataloader):
-    model.forward_model.train()
-    model.encoder.train()
+def train_epoch(model, optimizer, dataloader):
+    model.train()
     epoch_loss = 0
     for _, batch in enumerate(dataloader):
+        optimizer.zero_grad()
         
-        loss = model.process_recursive_batch(batch)
+        loss = model(batch)
         loss.backward()
         epoch_loss += loss.item()
-        model.encoder_optimizer.step()
-        model.forward_optimizer.step()
+        
+        optimizer.step()
         model.update_targets()
         
     return epoch_loss/len(dataloader)
 
 def val_epoch(model,dataloader):
-    model.encoder.eval()
-    model.forward_model.eval()
+    model.eval()
     
     epoch_loss = 0
     with torch.no_grad():
         for _, batch in enumerate(dataloader):
-            loss = model.process_recursive_batch(batch)
+            loss = model(batch)
             epoch_loss += loss.item()
             
-
     return epoch_loss/len(dataloader)
                 
 
 
-def train(model, train_dataloader, val_dataloader, num_epochs):
+def train(model, optimizer, train_dataloader, val_dataloader, num_epochs):
     info_bar = Bar('Training', max=num_epochs)
     min_val_loss = 100000
     
     for epoch in range(num_epochs):
-        spr_train_loss = train_epoch(model,train_dataloader)
-        spr_val_loss = model.val_epoch(model,val_dataloader)         
+        spr_train_loss = train_epoch(model,optimizer, train_dataloader)
+        spr_val_loss = val_epoch(model,val_dataloader)         
         short_epoch_info = "Epoch: {},  train Loss: {}, Val Loss: {}".format(epoch,spr_train_loss,spr_val_loss )   
         
         epoch_info = f"Epoch: {epoch},TRAIN : SPR Loss: {spr_train_loss} ||   VAL : SPR Loss: {spr_val_loss}"
@@ -62,7 +60,7 @@ def train(model, train_dataloader, val_dataloader, num_epochs):
         val_loss = spr_val_loss 
         if min_val_loss > val_loss:
             min_val_loss = val_loss
-            model.save_models()
+            torch.save(model.state_dict(), "best_model.pth")
 
         Bar.suffix = short_epoch_info
         info_bar.next()
@@ -86,8 +84,10 @@ def main(config):
 
     train_dataloader = DataLoader(train_dataset,batch_size=config["train_loop"]["batch_size"],shuffle=True,num_workers=config["train_loop"]["num_workers"])
     val_dataloader = DataLoader(val_dataset,batch_size=config["train_loop"]["batch_size"],shuffle=False,num_workers=config["train_loop"]["num_workers"])
+    
+    optimizer = torch.optim.Adam(model.parameters(),lr=config["train_loop"]["lr"])
 
-    train(model,train_dataloader,val_dataloader,config["train_loop"]["num_epochs"])
+    train(model,optimizer,train_dataloader,val_dataloader,config["train_loop"]["num_epochs"])
     print("Training Done")
     
     

@@ -1,17 +1,16 @@
 import argparse
 import torch
-from .networks.cnns import PatchConv2dModel
 from .utils import get_augmentation, soft_update_params, maybe_transform, renormalize
 import copy
 from .dynamics_model import AttentionDynamicsModel
-import einops
 import torch.nn.functional as F
 import torch.nn as nn
+import hydra
+from .patch_maker import PatchMaker
 
-
-class PatchContrastiveModel:
+class PatchContrastiveModel(nn.Module):
     def __init__(self, 
-                encoder_dict,
+                patchmaker_dict,
                 dynamics_dict,
                 augmentations = ["shift", "intensity"],
                 target_augmentations= ["shift", "intensity"],
@@ -19,8 +18,9 @@ class PatchContrastiveModel:
                 aug_prob=1,
                 lr=0.0001,
                 target_tau=0,
-                encoder_model_name="conv2d",
                 device="cpu"):
+        
+        super(PatchContrastiveModel,self).__init__()
         
         self.device = device
         self.aug_prob = aug_prob
@@ -29,39 +29,19 @@ class PatchContrastiveModel:
         self.val_transforms = get_augmentation(val_augmentations, 84)
         self.target_tau = target_tau #tau should be bigger than when no augmentation is used
         
-        if encoder_model_name == "conv2d":
-            self.encoder = PatchConv2dModel(**encoder_dict).to(self.device)
-
-        self.target_encoder = copy.deepcopy(self.encoder).to(self.device)
+        self.patchmaker = PatchMaker(**patchmaker_dict).to(self.device)
+        self.target_patchmaker = copy.deepcopy(self.patchmaker).to(self.device)
         
-        toy_map = self.encoder( torch.zeros(1,9,128,128).to(self.device))
-        num_patches = toy_map.flatten(2).shape[2]
-        in_features = toy_map.shape[1]
+        toy_patches = self.patchmaker(torch.zeros(1,9,128,128).to(self.device))
+        num_patches = toy_patches.shape[1]
+        in_features = toy_patches.shape[2]
         dynamics_dict["in_features"] = in_features
         dynamics_dict["num_patches"] = num_patches
         print(f"The encoder ouputs {num_patches} patches")
         print(f"The encoder ouputs {in_features} features per patch")
 
-        self.forward_model = AttentionDynamicsModel(**dynamics_dict).to(self.device)
+        self.forward_model = hydra.utils.instantiate(dynamics_dict).to(self.device)
                         
-        self.encoder_optimizer = torch.optim.Adam(self.encoder.parameters(),lr=lr)
-        self.forward_optimizer = torch.optim.Adam(self.forward_model.parameters(),lr=lr)
-
-        
-
-    def project(self, x,target=False):
-        if target:
-            x = self.target_encoder(x)
-            x = renormalize(x)
-            x = x.view(x.size(0), -1)
-            x = self.target_projection(x)
-            return x
-        else:
-            x = self.encoder(x)
-            x = renormalize(x)
-            x = x.view(x.shape[0], -1)
-            x = self.projection(x)
-            return x
     
     
     def apply_transforms(self, transforms, image):
@@ -83,7 +63,7 @@ class PatchContrastiveModel:
             return images
 
     def update_targets(self):
-        soft_update_params(self.encoder, self.target_encoder, self.target_tau)
+        soft_update_params(self.patchmaker, self.target_patchmaker, self.target_tau)
             
     
     def do_spr_loss(self,proj_latents, targets):
@@ -101,19 +81,18 @@ class PatchContrastiveModel:
         pred_actions = pred_actions.view(obs_pairs.shape[0],obs_pairs.shape[1],-1)
         
         return F.mse_loss(pred_actions, actions[:,:-1],-1)
+        
+    def forward(self, batch):
+        """
+        forward Processes a batch of transitions and returns the loss
 
-    def make_patches(self,images,target=False):
-        
-        if not target:
-            img_features = self.encoder(images)
-        else:
-            img_features = self.target_encoder(images)
-        
-        patches = einops.rearrange(img_features, 'b c h w -> b (h w)  c')
-        return patches.contiguous()
-        
-    def process_recursive_batch(self, batch):
-    
+
+        Args:
+            batch (_type_): batch containinng tuples of (obs, action, next_obs, reward)
+
+        Returns:
+            _type_: loss to be minimized
+        """        
         obs, action, _, _ = batch
         
         obs = obs.to(self.device)
@@ -121,7 +100,7 @@ class PatchContrastiveModel:
         
         first_obs = self.transform(obs[:,0], self.transforms, augment=True)   
         
-        patches = self.make_patches(first_obs,target=False)
+        patches = self.patchmaker(first_obs)
         
         patches = renormalize(patches)
         
@@ -138,7 +117,7 @@ class PatchContrastiveModel:
             target_obs = self.transform(obs, self.transforms, augment=True)
             target_patches = []
             for i in range(obs.shape[1]):
-                target_patches.append(self.make_patches(target_obs[:,i],target=True))
+                target_patches.append(self.target_patchmaker(target_obs[:,i]))
                 
             target_patches = torch.cat(target_patches, dim=1)
             
@@ -151,41 +130,3 @@ class PatchContrastiveModel:
         return spr_loss
 
         
-    def train_epoch(self,train_dataloader):
-        self.encoder.train()
-        self.forward_model.train()
-
-        epoch_loss = 0
-        for batch_idx, batch in enumerate(train_dataloader):
-            
-            loss = self.process_recursive_batch(batch)
-            loss.backward()
-            
-            epoch_loss += loss.item()
-            self.encoder_optimizer.step()
-            self.forward_optimizer.step()
-            self.update_targets()
-            
-        return epoch_loss/len(train_dataloader)
-
-    def val_epoch(self,val_dataloader):
-        self.encoder.eval()
-        self.forward_model.eval()
-        
-        epoch_loss = 0
-        with torch.no_grad():
-            for batch_idx, batch in enumerate(val_dataloader):
-                
-                loss = self.process_recursive_batch(batch)
-                
-                epoch_loss += loss.item()
-                
-
-        return epoch_loss/len(val_dataloader)
-            
-    def save_models(self):
-            
-        torch.save(self.encoder.state_dict(), "encoder.pt")
-        torch.save(self.forward_model.state_dict(), "forward_model.pt")
-
-    

@@ -3,16 +3,19 @@ model:
     target_augmentations: ["intensity"]
     val_augmentations: "none"
     aug_prob: 0.5
-    lr: 0.0001
     target_tau: 0
 
-    encoder_model_name: conv2d
-    encoder_dict:
-        in_channels: 9
-        channels: [32,64,64]
-        kernel_sizes: [3,3,3]
+    patchmaker_dict:
+        patch_size: -1
+        encode_then_patch: True
+        encoder_dict:
+            _target_: src.networks.cnns.PatchConv2dModel
+            in_channels: 9
+            channels: [32,64,64]
+            kernel_sizes: [3,3,3]
 
     dynamics_dict:
+        _target_: src.dynamics_model.AttentionDynamicsModel
         num_heads: 2
         mlp_dim: 128
         num_attention_layers: 2
@@ -22,7 +25,7 @@ model:
     device: "cpu"
 
 env:
-    num_transitions: 50000
+    num_transitions: 180
     num_sprites: 2
     all_sprite_mover: True
     random_init_places: False
@@ -31,6 +34,7 @@ train_loop:
     batch_size: 64
     num_epochs: 50
     num_workers: 2
+    lr: 0.0001
 
 hydra:
     run:
