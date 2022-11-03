@@ -54,6 +54,7 @@ class SequenceImageTransitionDataset(Dataset):
         self.sequence_length = sequence_length
         data = np.load(data_path)
         self.observations = torch.from_numpy(data["states"])
+        print(self.observations.shape)
         #self.observations = torch.cat((self.observations[:,0],self.observations[:,1],self.observations[:,2]),dim=-1).permute(0,3,1,2)
         self.observations = rearrange(self.observations,'n b h w c  -> n (b c) h w')
         self.next_observations = torch.from_numpy(data["next_states"])
@@ -76,15 +77,16 @@ class SequenceImageTransitionDataset(Dataset):
         """        
         episodes = []
         episode = []
-        for i in range(len(self.dones)):
+        for i in range(self.dones.shape[0]):
             episode.append(i)
             if self.dones[i]:
                 episodes.append(episode)
                 episode = []
-        
+        episodes.append(episode)
         cut_episodes = []
         for ep in episodes:
             cut_episodes.append(ep[:-self.sequence_length])
+            
         return [item for sublist in cut_episodes for item in sublist] #flatten list to get indices
 
     def __len__(self):

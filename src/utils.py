@@ -2,7 +2,7 @@ import math
 import random
 import re
 import time
-
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -11,10 +11,42 @@ from torch import distributions as pyd
 from torch.distributions.utils import _standard_normal
 from kornia.augmentation import RandomAffine,\
     RandomCrop,\
-    RandomResizedCrop,ColorJiggle
+    RandomResizedCrop,ColorJiggle,RandomGaussianNoise,RandomSharpness,VideoSequential
     
+    
+
 from kornia.filters import GaussianBlur2d
 EPS = 1e-6
+
+def plot_image_patches(image,patch_size,num_patches_sqrt):
+    """ 
+    Divide the image into patches of size patch_size and plot them
+    """
+    def image_to_image_patch(image,patch_size):
+        image_patches = []
+        for i in range(num_patches_sqrt):
+            for j in range(num_patches_sqrt):
+                image_patches.append(image[:,i*patch_size[0]:(i+1)*patch_size[0],j*patch_size[1]:(j+1)*patch_size[1]])
+        return torch.stack(image_patches)
+    img_patches = image_to_image_patch(image,patch_size).byte()
+    img_patches = img_patches.permute(0,2,3,1)
+    fig = plt.figure(figsize=(9, 13))
+    columns = num_patches_sqrt
+    rows = num_patches_sqrt
+    num_img_seq = 3
+    # ax enables access to manipulate each of subplots
+    ax = []
+
+    print(img_patches.shape)
+    for i in range(columns*rows):
+        # create subplot and append to ax
+        ax.append( fig.add_subplot(rows, columns, i+1) )
+        ax[-1].set_title("patch:"+str(i))  # set title
+        for t in range(num_img_seq):
+            plt.imshow(img_patches[i,:,:,t*3:(t+1)*3],alpha=0.2*(t+1))
+            
+    plt.show()
+    return img_patches
 
 def renormalize(tensor, first_dim=-2):
     if first_dim < 0:
@@ -45,8 +77,8 @@ def chain(*iterables):
 
 def soft_update_params(net, target_net, tau):
     for param, target_param in zip(net.parameters(), target_net.parameters()):
-        target_param.data.copy_(tau * param.data +
-                                (1 - tau) * target_param.data)
+        target_param.data.copy_((1-tau) * param.data +
+                                tau * target_param.data)
 
 
 def hard_update_params(net, target_net):
@@ -141,28 +173,35 @@ def select_at_indexes(indexes, tensor):
     return s_flat.view(tensor.shape[:dim] + tensor.shape[dim + 1:])
 
 
-def get_augmentation(augmentation, imagesize):
+def get_augmentation(augmentation, imagesize,aug_prob):
     if isinstance(augmentation, str):
         augmentation = augmentation.split("_")
     transforms = []
     for aug in augmentation:
         if aug == "affine":
-            transformation = RandomAffine(5, (.14, .14), (.9, 1.1), (-5, 5))
+            transformation = RandomAffine(5, (.14, .14), (.9, 1.1), (-5, 5), p=aug_prob)
         elif aug == "rrc":
-            transformation = RandomResizedCrop((imagesize, imagesize), (0.8, 1))
+            transformation = RandomResizedCrop((imagesize, imagesize), (0.8, 1), p=aug_prob)
         elif aug == "blur":
-            transformation = GaussianBlur2d((5, 5), (1.5, 1.5))
+            transformation = GaussianBlur2d((3, 3), (1., 1.))
         elif aug == "shift" or aug == "crop":
-            transformation = nn.Sequential(nn.ReplicationPad2d(4), RandomCrop((128, 128)))
+            transformation = nn.Sequential(nn.ReplicationPad2d(20), RandomCrop((imagesize, imagesize)), p=aug_prob)
         elif aug == "intensity":
             transformation = Intensity(scale=0.05)
+        elif aug == "noise":
+            transformation = RandomGaussianNoise(mean=0., std=0.002, p=aug_prob)
+        elif aug == "sharp":
+            transformation = RandomSharpness(sharpness=0.5, p=aug_prob)
+        elif aug == "color":
+            transformation = ColorJiggle(brightness=0.2, contrast=0.2, saturation=0.2, hue=0., p=aug_prob)
+
         elif aug == "none":
             continue
         else:
             raise NotImplementedError()
         transforms.append(transformation)
 
-    return transforms
+    return VideoSequential(*transforms, data_format="BTCHW", same_on_frame=True)
 
 
 class Intensity(nn.Module):

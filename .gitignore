@@ -5,3 +5,4 @@ data
 src/*.ipynb
 outputs
 *.out
+*.ipynb

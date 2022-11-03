@@ -1,3 +1,4 @@
+from re import L
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -196,10 +197,12 @@ class Conv2dModel(torch.nn.Module):
             in_channels,
             channels,
             kernel_sizes,
+            strides,
             paddings=None,
-            nonlinearity=torch.nn.ReLU,  # Module, not Functional.
+            nonlinearity=torch.nn.LeakyReLU,  # Module, not Functional.
             dropout=0.,
             norm_type="none",
+            use_maxpool=False
             ):
         super().__init__()
         if paddings is None:
@@ -230,6 +233,60 @@ class Conv2dModel(torch.nn.Module):
         already: [B,C,H,W]."""
         
         return self.conv(input)
+
+class DeConv2dModel(torch.nn.Module):
+    """2-D Convolutional model component, with option for max-pooling vs
+    downsampling for strides > 1.  Requires number of input channels, but
+    not input shape.  Uses ``torch.nn.ConvTransposes2d``.
+    Only used for image generation of channel size 3.
+    """
+
+    def __init__(
+            self,
+            in_channels,
+            channels,
+            kernel_sizes,
+            strides,
+            paddings=None,
+            nonlinearity=torch.nn.LeakyReLU,  # Module, not Functional.
+            dropout=0.,
+            norm_type="none",
+            use_maxpool=False
+            ):
+        super().__init__()
+        if paddings is None:
+            paddings = [0 for _ in range(len(channels))]
+        assert len(channels) == len(kernel_sizes) == len(strides) == len(paddings)
+        in_channels = [in_channels] + channels[:-1]
+        ones = [1 for _ in range(len(strides))]
+        if use_maxpool:
+            maxp_strides = strides
+            strides = ones
+        else:
+            maxp_strides = ones
+        conv_layers = [torch.nn.ConvTranspose2d(in_channels=ic, out_channels=oc,
+            kernel_size=k, stride=s, padding=p) for (ic, oc, k, s, p) in
+            zip(in_channels, channels, kernel_sizes, strides, paddings)]
+        sequence = list()
+        for conv_layer, maxp_stride, oc in zip(conv_layers, maxp_strides, channels):
+            sequence.extend([conv_layer, init_normalization(oc, norm_type), nonlinearity()])
+            #sequence.extend([conv_layer, nonlinearity()])
+            if dropout > 0:
+                sequence.append(nn.Dropout(dropout))
+            if maxp_stride > 1:
+                sequence.append(torch.nn.MaxPool2d(maxp_stride))  # No padding.
+        sequence.append(
+            nn.Conv2d(channels[-1], out_channels= 3,
+                kernel_size= 3, padding= 1),
+            nn.Tanh())
+        self.conv = torch.nn.Sequential(*sequence)
+
+    def forward(self, input):
+        """Computes the convolution stack on the input; assumes correct shape
+        already: [B,C,H,W]."""
+        
+        return self.conv(input)
+
 
 class PatchConv2dModel(torch.nn.Module):
     """2-D Convolutional model component,
@@ -271,3 +328,180 @@ class PatchConv2dModel(torch.nn.Module):
         
         return self.conv(input)
 
+class VAE_Encoder(nn.Module):
+    
+    def __init__(self,
+        in_channels,
+        channels,
+        kernel_sizes,
+        strides,
+        paddings):
+        super().__init__()
+        modules = []
+        in_chan = in_channels
+        for chan, kern, stri,padd, in zip(channels,kernel_sizes,strides,paddings):
+            modules.append(
+                nn.Sequential(
+                    nn.Conv2d(in_chan, out_channels=chan,
+                              kernel_size=kern,stride=stri,
+                              padding=padd,bias=False),#bias set to false since batcchnorm does  input - mean(input)
+                               # kernel_size= 3, stride= 2, padding  = 1),
+                    nn.BatchNorm2d(chan),
+                    nn.LeakyReLU())
+            )
+            in_chan = chan
+
+            
+        self.encoder = nn.Sequential(*modules)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        return x
+
+class VAE_Decoder(nn.Module):
+    def __init__(self,
+                channels,
+                kernel_sizes,
+                strides,
+                paddings,
+                out_dim=-1):
+        super().__init__()
+
+        modules = []
+        in_chan = channels[0]
+        for chan, kern, stri,padd, in zip(channels,kernel_sizes,strides,paddings):
+            modules.append(
+                nn.Sequential(
+                    nn.ConvTranspose2d(in_chan,
+                                       chan,
+                                       kernel_size=kern,
+                                       stride = stri,
+                                       padding=padd,
+                                       output_padding=1,
+                                       bias=False),
+                    nn.BatchNorm2d(chan),
+                    nn.LeakyReLU())
+            )
+            in_chan = chan
+
+
+        self.decoder = nn.Sequential(*modules)
+
+        self.final_layer = nn.Sequential(
+                            nn.ConvTranspose2d(channels[-1],
+                                               channels[-1],
+                                               kernel_size=3,
+                                               stride=2,
+                                               padding=1,
+                                               output_padding=1,
+                                               bias=False),
+                            nn.BatchNorm2d(channels[-1]),
+                            nn.LeakyReLU(),
+                            nn.Conv2d(channels[-1], out_channels=out_dim,
+                                      kernel_size= 3, padding= 2,stride=3),
+                            nn.Sigmoid())
+    def forward(self, x):
+        x = self.decoder(x)
+        x = self.final_layer(x)
+        return x
+    
+class VAE_Encoder3D(nn.Module):
+    
+    def __init__(self,
+        in_channels,
+        channels,
+        kernel_sizes,
+        strides,
+        paddings):
+        super().__init__()
+        modules = []
+        in_chan = in_channels
+        for chan, kern, stri,padd, in zip(channels,kernel_sizes,strides,paddings):
+            modules.append(
+                nn.Sequential(
+                    nn.Conv3d(in_chan, out_channels=chan,
+                              kernel_size=kern,stride=stri,
+                              padding=padd,bias=False),#bias set to false since batcchnorm does  input - mean(input)
+                               # kernel_size= 3, stride= 2, padding  = 1),
+                    nn.BatchNorm3d(chan),
+                    nn.LeakyReLU())
+            )
+            in_chan = chan
+
+            
+        self.encoder = nn.Sequential(*modules)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        return x
+
+class VAE_Decoder3D(nn.Module):
+    def __init__(self,
+                channels,
+                out_dim=3):
+        super().__init__()
+
+        modules = []
+        in_chan = channels[0]
+        convs = []
+        convs.append(nn.Sequential(nn.ConvTranspose3d(in_chan,
+                                            channels[1],
+                                            kernel_size=(3, 3, 3),
+                                            stride = 2,
+                                            padding=1,
+                                            output_padding=1,
+                                            bias=False),
+                    nn.BatchNorm3d(channels[1]),
+                    nn.LeakyReLU()))
+
+        convs.append(nn.Sequential(nn.ConvTranspose3d(channels[1],
+                                            channels[2],
+                                            kernel_size=(3, 3, 3),
+                                            stride = 2,
+                                            padding=1,
+                                            output_padding=1,
+                                            bias=False),
+                    nn.BatchNorm3d(channels[2]),
+                    nn.LeakyReLU()))
+
+        convs.append(nn.Sequential(nn.ConvTranspose3d(channels[2],
+                                            channels[3],
+                                            kernel_size=(3, 3, 3),
+                                            stride = 2,
+                                            padding=1,
+                                            output_padding=1,
+                                            bias=False),
+                    nn.BatchNorm3d(channels[3]),
+                    nn.LeakyReLU()))
+
+        convs.append(nn.Sequential(nn.ConvTranspose3d(channels[3],
+                                            channels[4],
+                                            kernel_size=(1, 3, 3),
+                                            stride = (1,2,2),
+                                            padding=(0,1,1),
+                                            output_padding=(0,1,1),
+                                            bias=False),
+                    nn.BatchNorm3d(channels[4]),
+                    nn.LeakyReLU()))
+
+
+        convs.append(nn.Sequential(nn.Conv3d(channels[4],
+                                            channels[5],
+                                            kernel_size=(3, 1, 1),
+                                            stride = (3,1,1),
+                                            padding=(1,0,0),
+                                            bias=False),
+                    nn.BatchNorm3d(channels[5]),
+                    nn.LeakyReLU()))
+
+        convs.append(nn.Sequential(nn.Conv3d(channels[5],
+                                            out_dim,
+                                            kernel_size=(3, 1, 1),
+                                            stride = (3,1,1),
+                                            padding=(1,0,0),
+                                            bias=False),
+                     nn.Sigmoid()))
+        self.decoder = nn.Sequential(*convs)
+    def forward(self, x):
+        
+        return self.decoder(x)

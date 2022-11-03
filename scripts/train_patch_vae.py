@@ -11,7 +11,7 @@ set_random_seed(0)
 
 from progress.bar import Bar
 import os
-from src.patch_contrastive_model import PatchContrastiveModel
+from src.patch_vae_model import PatchVAEModel
 from src.datasets import SequenceImageTransitionDataset
 from hydra.utils import get_original_cwd, to_absolute_path
 
@@ -20,32 +20,37 @@ logger = logging.getLogger(__name__)
 def train_epoch(model, optimizer, dataloader):
     model.train()
     dyn_loss_epoch = 0
-    byol_loss_epoch = 0
+    vae_loss_epoch = 0
+    total_loss = 0
+    
     for _, batch in enumerate(dataloader):
         optimizer.zero_grad()
-        
-        loss, dyn_loss, byol_loss = model(batch)
+
+        loss, vae_loss, dyn_loss = model(batch)
         loss.backward()
-        
-        dyn_loss_epoch += dyn_loss.item()
-        byol_loss_epoch += byol_loss.item()
+
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 2)
         optimizer.step()
-        model.update_targets()
+        dyn_loss_epoch += float(dyn_loss)
+        vae_loss_epoch += float(vae_loss)
+        total_loss += float(loss)
         
-    return dyn_loss_epoch/len(dataloader), byol_loss_epoch/len(dataloader)
+        
+    return total_loss/len(dataloader),vae_loss_epoch/len(dataloader), dyn_loss_epoch/len(dataloader),
 
 def val_epoch(model,dataloader):
     model.eval()
     
     dyn_loss_epoch = 0
-    byol_loss_epoch = 0
+    vae_loss_epoch = 0
+    total_loss = 0
     with torch.no_grad():
         for _, batch in enumerate(dataloader):
-            loss, dyn_loss, byol_loss = model(batch)
-            dyn_loss_epoch += dyn_loss.item()
-            byol_loss_epoch += byol_loss.item()
-            
-    return dyn_loss_epoch/len(dataloader), byol_loss_epoch/len(dataloader)
+            loss,  vae_loss, dyn_loss, = model(batch)
+            dyn_loss_epoch += float(dyn_loss)
+            vae_loss_epoch += float(vae_loss)
+            total_loss += float(loss)
+    return  total_loss/len(dataloader),vae_loss_epoch/len(dataloader),dyn_loss_epoch/len(dataloader)
                 
 
 
@@ -53,17 +58,18 @@ def train(model, optimizer, train_dataloader, val_dataloader, num_epochs):
     info_bar = Bar('Training', max=num_epochs)
     min_val_loss = 100000
     
+    scaler = torch.cuda.amp.GradScaler(enabled=False)#torch.cuda.is_available())
     for epoch in range(num_epochs):
-        train_dyn_loss, train_byol_loss = train_epoch(model,optimizer, train_dataloader)
-        val_dyn_loss, val_byol_loss = val_epoch(model,val_dataloader)         
-        short_epoch_info = "Epoch: {},  train Loss: {}, Val Loss: {}".format(epoch,train_dyn_loss+train_byol_loss,val_dyn_loss+ val_byol_loss )   
+        train_loss, train_vae_loss, train_dyn_loss = train_epoch(model,optimizer, train_dataloader)
+        val_loss, val_vae_loss, val_dyn_loss = val_epoch(model,val_dataloader)         
+        short_epoch_info = "Epoch: {},  train Loss: {}, Val Loss: {}".format(epoch,train_loss,val_loss )   
         
-        epoch_info = f"Epoch: {epoch},TRAIN : DYN Loss: {train_dyn_loss} BYOL LOSS: {train_byol_loss} ||   VAL : DYN Loss: {val_dyn_loss} BYOL LOSS: {val_byol_loss}"
+        epoch_info = f"Epoch: {epoch},TRAIN : DYN Loss: {train_dyn_loss} VAE LOSS: {train_vae_loss} ||   VAL : DYN Loss: {val_dyn_loss} VAE LOSS: {val_vae_loss}"
         logger.info(epoch_info)
-        val_loss = val_dyn_loss + (val_byol_loss*model.byol_loss_weight)
+        model.save_networks("last")
         if min_val_loss > val_loss:
             min_val_loss = val_loss
-            model.save_networks()
+            model.save_networks("best_val")
 
         Bar.suffix = short_epoch_info
         info_bar.next()
@@ -71,17 +77,18 @@ def train(model, optimizer, train_dataloader, val_dataloader, num_epochs):
     return model
 
 
-@hydra.main(config_path="configs", config_name="train_patch_contrastive")
+@hydra.main(config_path="configs", config_name="train_patch_vae")
 def main(config):
     
     print("Training with config: {}".format(config))
     
-    data_path = "{}/data/visual_{}transitions_{}_{}_{}_{}.npz".format(get_original_cwd(),config["env"]["num_transitions"],config["env"]["num_sprites"],("all_sprite_mover"if config["env"]["all_sprite_mover"] else "one_sprite_mover" if config["env"]["one_sprite_mover"] else "select_move"),config["env"]["random_init_places"],config["env"]["num_action_repeat"])
+    data_path = "{}/data/visual_{}transitions_{}_{}_{}_{}{}.npz".format(get_original_cwd(),config["env"]["num_transitions"],config["env"]["num_sprites"],("all_sprite_mover"if config["env"]["all_sprite_mover"] else "one_sprite_mover" if config["env"]["one_sprite_mover"] else "select_move"),config["env"]["random_init_places"],config["env"]["num_action_repeat"],("instantmove" if config["env"]["instant_move"] else ""))
     dataset = SequenceImageTransitionDataset(data_path=data_path)
     action_dim = dataset[0][1].shape[1]
     
     config["model"]["dynamics"]["action_dim"] = action_dim
-    model = PatchContrastiveModel(**config["model"])
+    config["model"]["patch_vae"]["in_channels"] = (3 if config["env"]["instant_move"] else 9)
+    model = PatchVAEModel(**config["model"])
     
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [int(len(dataset)*0.8), len(dataset)-int(len(dataset)*0.8)])
 

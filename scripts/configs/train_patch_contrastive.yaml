@@ -1,0 +1,20 @@
+defaults:
+    - model: patch_contrastive_model
+env:
+    num_transitions: 50000
+    num_sprites: 4
+    all_sprite_mover: True
+    random_init_places: True
+    num_action_repeat: 4
+
+train_loop:
+    batch_size: 8
+    num_epochs: 50
+    num_workers: 3
+    lr: 0.0001
+
+hydra:
+    run:
+        dir: outputs/patch_contrastive/${now:%Y.%m.%d}/${now:%H%M%S}/
+    sweep:
+        dir: ./${algorithm.name}/${experiment}/${overrides.env}/${now:%Y.%m.%d}/${now:%H%M%S}

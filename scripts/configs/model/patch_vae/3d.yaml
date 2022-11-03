@@ -1,0 +1,15 @@
+  _target_: src.patch_vae_3d.PatchVAE3D
+  patch_size: 32
+  in_channels: 3
+  latent_dim: 256
+  channels: [32,64,128,256]
+  kernel_sizes: [3,3,3,[1,3,3]]
+  paddings: [1,1,1,1]
+  strides: [2,2,2,2]
+  kld_weight: 0.001
+  loss_type: 'B'
+  gamma: 10.0
+  max_capacity: 25
+  Capacity_max_iter: 10000
+  beta: 4
+
