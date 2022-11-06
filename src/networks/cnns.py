@@ -9,19 +9,24 @@ import numpy as np
 
 
 class MLP(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers=1,activation=nn.ReLU):
+    def __init__(self, input_size, output_size,layer_sizes = [], activation=nn.ReLU):
         super(MLP, self).__init__()
         self.input_size = input_size
-        self.hidden_size = hidden_size
-        self.num_layers = num_layers
+        self.layer_sizes = layer_sizes
         self.activation = activation
-        
+        print(f"Creating MLP with input size {input_size} and output size {output_size}")
+        print(f"Creating MLP with layer sizes {layer_sizes}")
         self.layers = []
-        self.layers.append(nn.Linear(input_size, hidden_size))
-        for _ in range(max(0, num_layers - 2)):
-            self.layers.append(nn.Linear(hidden_size, hidden_size))
-            self.layers.append(activation())
-        self.layers.append(nn.Linear(hidden_size, output_size))
+        if len(layer_sizes) == 0:
+            self.layers = nn.Linear(input_size, output_size)
+        else:
+            self.layers.append(nn.Linear(input_size, layer_sizes[0]))
+            for i in range(len(layer_sizes)-1):
+                self.layers.append(self.activation())
+                self.layers.append(nn.Linear(layer_sizes[i], layer_sizes[i+1]))
+            self.layers.append(self.activation())
+            self.layers.append(nn.Linear(layer_sizes[-1], output_size))
+            
         self.layers = nn.Sequential(*self.layers)
         
     def forward(self, x):
@@ -386,7 +391,21 @@ class VAE_Decoder(nn.Module):
 
 
         self.decoder = nn.Sequential(*modules)
+        self.final_layer = nn.Sequential(
+                            nn.ConvTranspose2d(channels[-1],
+                                               channels[-1],
+                                               kernel_size=3,
+                                               stride=2,
+                                               padding=1,
+                                               output_padding=1,
+                                               bias=False),
+                            nn.BatchNorm2d(channels[-1]),
+                            nn.LeakyReLU(),
+                            nn.Conv2d(channels[-1], out_channels=out_dim,
+                                      kernel_size= 3, padding= 1,stride=2),
+                            nn.Sigmoid())
 
+        """
         self.final_layer = nn.Sequential(
                             nn.ConvTranspose2d(channels[-1],
                                                channels[-1],
@@ -400,6 +419,8 @@ class VAE_Decoder(nn.Module):
                             nn.Conv2d(channels[-1], out_channels=out_dim,
                                       kernel_size= 3, padding= 2,stride=3),
                             nn.Sigmoid())
+        """
+        
     def forward(self, x):
         x = self.decoder(x)
         x = self.final_layer(x)

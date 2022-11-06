@@ -1,0 +1,19 @@
+_target_: src.discrete_dynamics_model.DiscreteAttentionDynamicsModel
+obs_vocab_size: 512
+embed_dim: 512
+num_patches: -1
+in_features: -1
+
+num_actions: 4
+action_dim: 4 # UP DOWN LEFT RIGHT for spriteworld discrete
+group_actions: False
+use_attn_mask: False
+discrete_actions: True
+
+num_heads: 4
+mlp_dim: 512
+num_attention_layers: 4
+dropout: 0.1
+residual: True
+
+regularizer_weight: 0

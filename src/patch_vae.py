@@ -11,7 +11,7 @@ class PatchVAE(nn.Module):
 
     def __init__(self,
                  in_channels: int,
-                 latent_dim: int,
+                 embed_dim: int,
                  channels: list,
                  kernel_sizes: list,
                  strides: list,
@@ -22,10 +22,11 @@ class PatchVAE(nn.Module):
                  Capacity_max_iter: int = 1e5,
                  loss_type:str = 'B',
                  kld_weight: float = 0.005,
-                 patch_size:int = 32) -> None:
+                 patch_size:int = 32,
+                 name="") -> None:
         super(PatchVAE, self).__init__()
 
-        self.latent_dim = latent_dim
+        self.embed_dim = embed_dim
         self.beta = beta
         self.gamma = gamma
         self.loss_type = loss_type
@@ -36,12 +37,12 @@ class PatchVAE(nn.Module):
         self.last_channel = channels[-1]        
         # Build Encoder
         self.encoder = VAE_Encoder(in_channels, channels,kernel_sizes,strides,paddings)
-        self.fc_mu = nn.Linear(channels[-1]*4, latent_dim)
-        self.fc_var = nn.Linear(channels[-1]*4, latent_dim)
+        self.fc_mu = nn.Linear(channels[-1]*4, embed_dim)
+        self.fc_var = nn.Linear(channels[-1]*4, embed_dim)
 
         # Build Decoder
         
-        self.decoder_input = nn.Linear(latent_dim, channels[-1] * 4)
+        self.decoder_input = nn.Linear(embed_dim, channels[-1] * 4)
 
         channels.reverse()
         kernel_sizes.reverse()
@@ -49,11 +50,14 @@ class PatchVAE(nn.Module):
         paddings.reverse()
         self.decoder = VAE_Decoder(channels,kernel_sizes,strides,paddings,out_dim=in_channels)
         
+        
+        self.num_patches = self.encode(torch.zeros(1,3,128,128))[0].shape[0]
+        
     def encode(self, input):
         """
         Encodes the input by passing through the encoder network
         and returns the latent codes.
-        :param input: (Tensor) Input tensor to encoder [N x C x H x W]
+        :param input: (Tensor) Input tensor to encoder [B x C x H x W]
         :return: (Tensor) List of latent codes
         """
         patches = self.images_to_patches(input)
@@ -103,11 +107,11 @@ class PatchVAE(nn.Module):
         
         return  [self.decode(z), z, mu, log_var]
 
-    def get_embeddings(self,input):
-        mu, log_var = self.encode(input)
+    def get_encoding_for_dynamics(self, x: torch.Tensor) -> torch.Tensor:
+        mu, log_var = self.encode(x)
         return self.reparameterize(mu, log_var)
 
-        
+
     def images_to_patches(self,images):
         """
         image_to_patch Make an image as a list of patches of size (patch_size,patch_size)
@@ -144,3 +148,26 @@ class PatchVAE(nn.Module):
             raise ValueError('Undefined loss type.')
 
         return {'loss': loss, 'Reconstruction_Loss':recons_loss, 'KLD':kld_loss}
+    
+
+    def compute_loss_encodings(self, obs):
+        ## obs should be of shape (batch, time ,channels, height, width)
+        obs = einops.rearrange(obs, "b t c h w -> (b t) c h w")
+        recons, z, mu, log_var = self(obs)
+        patches = einops.rearrange(obs, "b c (h p1) (w p2) -> (b h w) c p1 p2", p1=self.patch_size, p2=self.patch_size)
+        (recons, mu_removed, log_var), patches = self.remove_empty_patches_for_loss([recons, mu, log_var], patches) 
+        loss_dict = self.loss_function(recons, patches, mu_removed, log_var)
+        
+        mu =  einops.rearrange(mu, "(b t n) c -> b t n c", b=obs.shape[0],t=obs.shape[1])
+        return loss_dict["loss"], mu
+    
+    def remove_empty_patches_for_loss(self, prediction, target):
+        #remove patches that are all zeros
+        # patches is of shape (b c h w)
+        empty_patches = (target.sum(axis=(1,2,3)) == 0)
+        target  = target[~empty_patches]
+        if isinstance(prediction,list):
+            prediction = [pred[~empty_patches] for pred in prediction]
+        else:
+            prediction = prediction[~empty_patches]
+        return prediction, target

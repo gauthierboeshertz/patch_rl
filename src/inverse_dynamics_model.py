@@ -5,7 +5,7 @@ import numpy as np
 import hydra
 import einops
 import math
-from einops.layers.torch import Rearrange
+from .networks.cnns import Conv2dModel, MLP
 
 class PatchInverseDynamicsModel(torch.nn.Module):
     """
@@ -14,27 +14,30 @@ class PatchInverseDynamicsModel(torch.nn.Module):
 
     def __init__(
             self,
-            encoder_dict,
-            mlp_head_dict,
-            num_patches
+            encoder,
+            mlp,
             ):
         super(PatchInverseDynamicsModel,self).__init__()
         
-        self.encoder = hydra.utils.instantiate(encoder_dict)
-        self.mlp_head = hydra.utils.instantiate(mlp_head_dict)
-        self.sqrt_num_patches = math.sqrt(num_patches)
-        self.patches_to_embed = nn.Sequential(Rearrange('b (h w) c -> b c h w', h=self.sqrt_num_patches, w=self.sqrt_num_patches),
-                                    self.encoder)        
+        print(encoder)
+        self.encoder = Conv2dModel(**encoder)
+        self.mlp_head = MLP(**mlp)
+
+        
     def forward(self, input):
         """ Predicts the action from the observation and the next observation with patch embeddings
         """
-        obs_patches = input[0]
-        next_obs_patches = input[1]
+        assert len(input.shape) == 5, "The input should be of shape (batch_size,2, patch_dim, height, width)"
+        #obs_patches = input[:,0]
+        #next_obs_patches = input[:,1]
         
-        obs_embed = self.patches_to_embed(obs_patches)
-        next_obs_embed = self.patches_to_embed(next_obs_patches)
+        #obs_embed = self.encoder(obs_patches).flatten(1)
+        #next_obs_embed = self.encoder(next_obs_patches).flatten(1)
         
-        merged_embed = torch.cat([obs_embed, next_obs_embed], dim=1)
+        #merged_embed = torch.cat([obs_embed, next_obs_embed], dim=1)
         
-        return self.mlp_head(merged_embed)                
+        #return self.mlp_head(merged_embed)                
+        input_stack = einops.rearrange(input, 'b t c  h w -> b (t c) h w')
+        input_enc = self.encoder(input_stack).flatten(1)
+        return self.mlp_head(input_enc)    
         

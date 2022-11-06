@@ -51,19 +51,20 @@ def main(config):
                                                             sparse_reward=True,
                                                             one_sprite_mover=config["one_sprite_mover"],
                                                             all_sprite_mover=config["all_sprite_mover"],
+                                                            discrete_all_sprite_mover=config["discrete_all_sprite_mover"],
                                                             random_init_places=config["random_init_places"],
                                                             visual_obs = config["visual_obs"],
                                                             instant_move = config["instant_move"],
-                                                            action_scale=0.2)
+                                                            action_scale=0.05)
     
 
     env = environment.Environment(**env_config)
     gym_env = gym_wrapper.GymWrapper(env)
     
     if config["visual_obs"]:
-        num_stack = 3 if not config["instant_move"] else 1
+        num_stack = 3 if not (config["instant_move"] or config["discrete_all_sprite_mover"]) else 1
         gym_env = wrappers.FrameStack(gym_env,num_stack)
-    data_name = "../data/{}_{}transitions_{}_{}_{}_{}{}".format("visual" if config["visual_obs"] else "states",config["num_transitions"],config["num_sprites"],("all_sprite_mover"if config["all_sprite_mover"] else "one_sprite_mover" if config["one_sprite_mover"] else "select_move"),config["random_init_places"],config["num_action_repeat"],"instantmove" if config["instant_move"] else "")
+    data_name = "../data/{}_{}transitions_{}_{}_{}_{}{}".format("visual" if config["visual_obs"] else "states",config["num_transitions"],config["num_sprites"],("all_sprite_mover"if config["all_sprite_mover"] else "one_sprite_mover" if config["one_sprite_mover"] else "discrete_all_sprite_mover" if config["discrete_all_sprite_mover"] else "select_move"),config["random_init_places"],config["num_action_repeat"],"instantmove" if config["instant_move"] else "")
     print("Data name",data_name)
     gather_env_transitions(gym_env,config["num_transitions"],num_action_repeat=config["num_action_repeat"],data_name=data_name)
     
@@ -73,6 +74,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_sprites', type=int, default=1)
     parser.add_argument('--one_sprite_mover', action="store_true")
     parser.add_argument('--all_sprite_mover', action="store_true")
+    parser.add_argument('--discrete_all_sprite_mover', action="store_true")
     parser.add_argument('--num_transitions', type=int,default=20000)
     parser.add_argument('--random_init_places', action="store_true")
     parser.add_argument('--visual_obs', action="store_true")

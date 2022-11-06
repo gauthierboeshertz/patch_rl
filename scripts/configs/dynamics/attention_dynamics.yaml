@@ -1,0 +1,15 @@
+_target_: src.dynamics_model.AttentionDynamicsModel
+num_heads: 4
+mlp_dim: 256
+num_attention_layers: 4
+dropout: 0.2
+action_dim: 4
+in_features: -1
+num_patches: -1
+group_actions: False
+residual: True
+use_attn_mask: True
+discrete_actions: True
+regularizer_weight: 0
+num_actions: -1
+embed_dim: 512
