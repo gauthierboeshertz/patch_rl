@@ -1,7 +1,7 @@
 name: patch_vae
 _target_: src.patch_vae.PatchVAE
 patch_size: 16
-in_channels: 9
+in_channels: 3
 embed_dim: 256
 channels: [64,128,256] #[64,64,128,256]
 kernel_sizes: [3,3,3] #[3,3,3,3]

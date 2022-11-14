@@ -12,7 +12,7 @@ import copy
 import hydra
 from .networks.vq_cnns import Encoder, Decoder,EncoderDecoderConfig
 import einops
-
+from .patch_utils import  patches_to_image
 @dataclass
 class TokenizerEncoderOutput:
     z: torch.FloatTensor
@@ -92,6 +92,10 @@ class VQVAE(nn.Module):
         if should_postprocess:
             rec = self.postprocess_output(rec)
         return rec
+    
+    def reconstruct_image(self,images):
+        return self(images, should_preprocess=False, should_postprocess=False)[-1]
+
 
     def get_encoding_for_dynamics(self, x: torch.Tensor) -> torch.Tensor:
         return self.encode(x, should_preprocess=False).tokens

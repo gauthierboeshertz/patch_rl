@@ -1,7 +1,6 @@
 # Taken from https://github.com/lucidrains/vit-pytorch
 import torch
 from torch import nn
-
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
@@ -34,11 +33,10 @@ class FeedForward(nn.Module):
         return self.net(x)
 
 class Attention(nn.Module):
-    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.,use_rel_pos=-1):
+    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.,use_rel_pos=-1, ):
         super().__init__()
         inner_dim = dim_head *  heads
         project_out = not (heads == 1 and dim_head == dim)
-
         self.heads = heads
         self.scale = dim_head ** -0.5
 
@@ -69,7 +67,8 @@ class Attention(nn.Module):
 
         out = torch.matmul(attn, v)
         out = rearrange(out, 'b h n d -> b n (h d)')
-        return self.to_out(out), torch.mean(attn,axis=1)
+        
+        return self.to_out(out), attn
 
 class Transformer(nn.Module):
     def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.,residual=True):

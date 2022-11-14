@@ -12,44 +12,12 @@ from torch.distributions.utils import _standard_normal
 from kornia.augmentation import RandomAffine,\
     RandomCrop,\
     RandomResizedCrop,ColorJiggle,RandomGaussianNoise,RandomSharpness,VideoSequential
-    
-    
-
+from moog_demos.example_configs import bouncing_sprites
 from kornia.filters import GaussianBlur2d
 EPS = 1e-6
 
-def plot_image_patches(image,patch_size,num_patches_sqrt):
-    """ 
-    Divide the image into patches of size patch_size and plot them
-    """
-    def image_to_image_patch(image,patch_size):
-        image_patches = []
-        for i in range(num_patches_sqrt):
-            for j in range(num_patches_sqrt):
-                image_patches.append(image[:,i*patch_size[0]:(i+1)*patch_size[0],j*patch_size[1]:(j+1)*patch_size[1]])
-        return torch.stack(image_patches)
-    img_patches = image_to_image_patch(image,patch_size).byte()
-    img_patches = img_patches.permute(0,2,3,1)
-    fig = plt.figure(figsize=(9, 13))
-    columns = num_patches_sqrt
-    rows = num_patches_sqrt
-    num_img_seq = img_patches.shape[-1]//3
-    # ax enables access to manipulate each of subplots
-    ax = []
 
-    print(img_patches.shape)
-    for i in range(columns*rows):
-        # create subplot and append to ax
-        ax.append( fig.add_subplot(rows, columns, i+1) )
-        ax[-1].set_title("patch:"+str(i))  # set title
-        if num_img_seq == 1:
-            plt.imshow(img_patches[i])
-        else:
-            for t in range(num_img_seq):
-                plt.imshow(img_patches[i,:,:,t*3:(t+1)*3],alpha=0.2*(t+1))
-            
-    plt.show()
-    return img_patches
+
 
 def renormalize(tensor, first_dim=-2):
     if first_dim < 0:

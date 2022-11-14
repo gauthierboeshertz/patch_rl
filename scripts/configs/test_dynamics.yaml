@@ -4,6 +4,9 @@ defaults:
     - inverse: cnn
 
 device: "cpu"
+num_workers: 3
+encoder_decoder_path : -1
+dynamics_model_path : "/cluster/home/gboeshertz/patch_rl/outputs/dynamics/patch_vae/2022.11.10/114646/best_val_dynamics.pt"
 
 loss_weights:
     dyn_loss_weight: 0
@@ -11,7 +14,7 @@ loss_weights:
     inverse_loss_weight: 0
 
 env:
-    num_transitions: 50000
+    num_transitions: 150
     num_sprites: 4
     all_sprite_mover: False
     one_sprite_mover: False
@@ -20,13 +23,6 @@ env:
     num_action_repeat: 4
     instant_move: False
     
-train_loop:
-    batch_size: 8
-    num_epochs: 200
-    num_workers: 3
-    lr: 0.0001
-    scheduler_milestones: [100,150]
-
 hydra:
     run:
-        dir: outputs/patch_model/${encoder_decoder.name}/${now:%Y.%m.%d}/${now:%H%M%S}/
+        dir: outputs/test_dynamics/${encoder_decoder.name}/${now:%Y.%m.%d}/${now:%H%M%S}/

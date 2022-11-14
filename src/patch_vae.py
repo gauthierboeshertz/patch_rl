@@ -4,6 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 from .networks.cnns import VAE_Encoder, VAE_Decoder
 import einops
+from .patch_utils import  patches_to_image
 
 class PatchVAE(nn.Module):
 
@@ -52,6 +53,7 @@ class PatchVAE(nn.Module):
         
         
         self.num_patches = self.encode(torch.zeros(1,3,128,128))[0].shape[0]
+
         
     def encode(self, input):
         """
@@ -109,7 +111,7 @@ class PatchVAE(nn.Module):
 
     def get_encoding_for_dynamics(self, x: torch.Tensor) -> torch.Tensor:
         mu, log_var = self.encode(x)
-        return self.reparameterize(mu, log_var)
+        return mu#self.reparameterize(mu, log_var)
 
 
     def images_to_patches(self,images):
@@ -149,17 +151,23 @@ class PatchVAE(nn.Module):
 
         return {'loss': loss, 'Reconstruction_Loss':recons_loss, 'KLD':kld_loss}
     
+    def reconstruct_image(self,images):
+        patches = self.images_to_patches(images)
+        recons = self.forward(patches)[0]
+        recons = einops.rearrange(recons, "(b n) c h w -> b n c h w", b=images.shape[0])
+        recons_image = patches_to_image(recons,self.patch_size,images.shape[2])
+        return recons_image
 
     def compute_loss_encodings(self, obs):
         ## obs should be of shape (batch, time ,channels, height, width)
-        obs = einops.rearrange(obs, "b t c h w -> (b t) c h w")
-        recons, z, mu, log_var = self(obs)
-        patches = einops.rearrange(obs, "b c (h p1) (w p2) -> (b h w) c p1 p2", p1=self.patch_size, p2=self.patch_size)
-        (recons, mu_removed, log_var), patches = self.remove_empty_patches_for_loss([recons, mu, log_var], patches) 
-        loss_dict = self.loss_function(recons, patches, mu_removed, log_var)
+        tobs = einops.rearrange(obs, "b t c h w -> (b t) c h w")
+        recons, z, mu, log_var = self(tobs)
+        patches = einops.rearrange(tobs, "b c (h p1) (w p2) -> (b h w) c p1 p2", p1=self.patch_size, p2=self.patch_size)
+        #(recons, mu_removed, log_var), patches = self.remove_empty_patches_for_loss([recons, mu, log_var], patches) 
+        loss_dict = self.loss_function(recons, patches, mu, log_var)
         
         mu =  einops.rearrange(mu, "(b t n) c -> b t n c", b=obs.shape[0],t=obs.shape[1])
-        return loss_dict["loss"], mu
+        return loss_dict["loss"], mu, loss_dict
     
     def remove_empty_patches_for_loss(self, prediction, target):
         #remove patches that are all zeros

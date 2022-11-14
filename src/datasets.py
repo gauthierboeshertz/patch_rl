@@ -38,7 +38,7 @@ class ImageTransitionDataset(Dataset):
 
 class SequenceImageTransitionDataset(Dataset):
     
-    def __init__(self, data_path:str,sequence_length=5, onehot_action=False) -> None:
+    def __init__(self, data_path:str,sequence_length=5, onehot_action=False,is_test=False) -> None:
         """
         __init__ loads a transition dataset, getting an item results in getting sequence_length transition
                 
@@ -52,6 +52,7 @@ class SequenceImageTransitionDataset(Dataset):
         super(SequenceImageTransitionDataset).__init__()
         assert data_path is not None 
         self.sequence_length = sequence_length
+        self.is_test = is_test
         data = np.load(data_path)
         self.observations = torch.from_numpy(data["states"])
         print(self.observations.shape)
@@ -62,9 +63,17 @@ class SequenceImageTransitionDataset(Dataset):
         self.actions = torch.from_numpy(data["actions"])
         self.rewards = torch.from_numpy(data["rewards"])
         self.dones = torch.from_numpy(data["dones"])
+        if is_test:
+            self.infos = torch.from_numpy(data["infos"])
+            print(self.infos)
+            print(self.infos.shape)
         
         self.valid_transitions_indices = self._get_valid_indices()
-        self.observations, self.actions, self.next_observations, self.rewards = self._make_all_sequence() 
+        
+        if  self.is_test:
+            self.observations, self.actions, self.next_observations, self.rewards, self.infos = self._make_all_sequence() 
+        else:
+            self.observations, self.actions, self.next_observations, self.rewards = self._make_all_sequence() 
         assert self.observations.shape[0] == self.actions.shape[0] == self.next_observations.shape[0] == self.rewards.shape[0] == len(self.valid_transitions_indices)
         if onehot_action:
             self.actions = nn.functional.one_hot(self.actions.long(),num_classes=4).float().permute(0,1,3,2)
@@ -110,26 +119,39 @@ class SequenceImageTransitionDataset(Dataset):
         all_actions = []
         all_next_obs = []
         all_rewards = []
+        all_infos = []
         for t_idx in self.valid_transitions_indices:
             obs = []
             actions = []
             next_obs = []
             rewards = []
+            infos = []
             for i in range(self.sequence_length):
                 obs.append(self.observations[t_idx+i])
                 actions.append(self.actions[t_idx+i])
                 next_obs.append(self.next_observations[t_idx+i])
                 rewards.append(self.rewards[t_idx+i])
+                if self.is_test:
+                    infos.append(self.infos[t_idx+i])
+                    
             all_obs.append(torch.stack(obs).float())
             all_actions.append(torch.stack(actions).float())
             all_next_obs.append(torch.stack(next_obs).float())
             all_rewards.append(torch.stack(rewards).float())
-        return torch.stack(all_obs), torch.stack(all_actions), torch.stack(all_next_obs), torch.stack(all_rewards)#torch.stack(obs).float(), torch.stack(actions).float(), torch.stack(next_obs).float(), torch.stack(rewards).float()
+            if self.is_test:
+                all_infos.append(torch.stack(infos).float())
+        if self.is_test:
+            return torch.stack(all_obs), torch.stack(all_actions), torch.stack(all_next_obs), torch.stack(all_rewards), torch.stack(all_infos)
+        else:
+            return torch.stack(all_obs), torch.stack(all_actions), torch.stack(all_next_obs), torch.stack(all_rewards)#torch.stack(obs).float(), torch.stack(actions).float(), torch.stack(next_obs).float(), torch.stack(rewards).float()
 
         
         
         
     def __getitem__(self, idx):
         
-        return self.observations[idx], self.actions[idx], self.next_observations[idx], self.rewards[idx]
+        if self.is_test:
+            return self.observations[idx], self.actions[idx], self.next_observations[idx], self.rewards[idx], self.infos[idx]
+        else:
+            return self.observations[idx], self.actions[idx], self.next_observations[idx], self.rewards[idx]
 

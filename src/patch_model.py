@@ -81,11 +81,11 @@ class PatchModel(nn.Module):
         obs_pairs = torch.stack([encodings[:,:-1], encodings[:,1:]], dim=2)
         obs_pairs = einops.rearrange(obs_pairs, "b t p c h w -> (b t) p c h w", h=num_patches_sqrt, w=num_patches_sqrt)
         pred_actions = self.inverse_model(obs_pairs)
-        pred_actions = einops.rearrange(pred_actions, "b (a h) -> b a h", a=self.forward_model.action_embedding.num_actions)
+        pred_actions = einops.rearrange(pred_actions, "b (a h) -> b a h", a=self.dynamics_model.action_embedding.num_actions)
         actions = actions[:,:-1]
-        actions = einops.rearrange(actions, "b t a h -> (b t) a h")
-        actions = actions.permute(0,2,1)
-        actions = actions#.max(dim=-1)
+        actions = einops.rearrange(actions, "b t a -> (b t) a ").long()
+        #actions = actions.permute(0,2,1).squeeze().long()
+        #actions = actions#.max(dim=-1)
         
         return F.cross_entropy(pred_actions, actions)
     
@@ -107,14 +107,12 @@ class PatchModel(nn.Module):
         
         obs = self.transform(obs, self.transforms, augment=False)
         
-        vae_loss, encodings = self.encoder_decoder.compute_loss_encodings(obs)
+        vae_loss, encodings, vae_loss_dict = self.encoder_decoder.compute_loss_encodings(obs)
         
-        print(encodings.shape)
-
         if self.dyn_loss_weight > 0:
             #encodings = encodings[:,0]
             del obs
-            dyn_loss = self.dynamics_model.compute_loss(encodings,actions)
+            dyn_loss, _ = self.dynamics_model.compute_loss(encodings,actions)
         else:
             dyn_loss = torch.tensor(0.0).to(self.device)
         
@@ -124,7 +122,7 @@ class PatchModel(nn.Module):
             inverse_loss = torch.tensor(0.0).to(self.device)
         
         
-        loss_dict = {"vae_loss":vae_loss, "dyn_loss":dyn_loss, "inverse_loss":inverse_loss}
+        loss_dict = {"vae_loss":vae_loss, "dyn_loss":dyn_loss, "inverse_loss":inverse_loss, "recons_loss":vae_loss_dict["Reconstruction_Loss"]}
         
         return (self.vae_loss_weight*vae_loss) + (self.dyn_loss_weight*dyn_loss) + (self.inverse_loss_weight*inverse_loss), loss_dict
 

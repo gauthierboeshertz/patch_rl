@@ -1,44 +1,17 @@
 import hydra
-from omegaconf import DictConfig, OmegaConf
-import sys
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
 import logging
-
 from stable_baselines3.common.utils import set_random_seed
 set_random_seed(0)
-
-from progress.bar import Bar
-import os
 from src.patch_model import PatchModel
 from src.datasets import SequenceImageTransitionDataset
-from hydra.utils import get_original_cwd, to_absolute_path
+from hydra.utils import get_original_cwd
 from collections import defaultdict
-import einops
+from omegaconf import  OmegaConf
 
 logger = logging.getLogger(__name__)
-
-def train_epoch(model, optimizer, dataloader):
-    model.train()
-
-    total_loss = 0
-    epoch_loss_dict = defaultdict(float)
-    for _, batch in enumerate(dataloader):
-        optimizer.zero_grad()
-
-        loss, loss_dict = model(batch)
-        loss.backward()
-
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
-        optimizer.step()
-        for k in loss_dict:
-            epoch_loss_dict[k] += float(loss_dict[k])
-        total_loss += float(loss)
-        
-    for k in epoch_loss_dict:
-        epoch_loss_dict[k] /= len(dataloader)
-    return total_loss/len(dataloader), epoch_loss_dict
+import os
 
 def val_epoch(model,dataloader):
     model.eval()
@@ -59,34 +32,16 @@ def val_epoch(model,dataloader):
                 
 
 
-def train(model, optimizer, train_dataloader, val_dataloader, num_epochs,scheduler):
-    info_bar = Bar('Training', max=num_epochs)
-    min_val_loss = 100000
+def test(model,  train_dataloader):
     
-    for epoch in range(num_epochs):
-        train_loss, train_loss_dict = train_epoch(model,optimizer, train_dataloader)
-        val_loss, val_loss_dict = val_epoch(model,val_dataloader)        
+    _, test_loss_dict = val_epoch(model, train_dataloader)
         
-        scheduler.step()
-         
-        short_epoch_info = "Epoch: {},  train Loss: {}, Val Loss: {}".format(epoch,train_loss,val_loss )   
-        
-        epoch_info = f"Epoch: {epoch}, TRAIN: "
-        for k in train_loss_dict:
-            epoch_info += f"{k}: {train_loss_dict[k]:.5f}, "
-        epoch_info += "VAL: "
-        for k in val_loss_dict:
-            epoch_info += f"{k}: {val_loss_dict[k]:.5f}, "
-        #epoch_info = f"Epoch: {epoch},TRAIN : DYN Loss: {train_dyn_loss} VAE LOSS: {train_vae_loss}  INV LOSS: {train_inv_loss}||   VAL : DYN Loss: {val_dyn_loss} VAE LOSS: {val_vae_loss} INV LOSS: {val_inv_loss}"
-        logger.info(epoch_info)
-        model.save_networks("last")
-        if min_val_loss > val_loss:
-            min_val_loss = val_loss
-            model.save_networks("best_val")
-
-        Bar.suffix = short_epoch_info
-        info_bar.next()
-    info_bar.finish()
+    epoch_info = f"Test: "
+    for k in test_loss_dict:
+        epoch_info += f"{k}: {test_loss_dict[k]:.5f}, "
+    #epoch_info = f"Epoch: {epoch},TRAIN : DYN Loss: {train_dyn_loss} VAE LOSS: {train_vae_loss}  INV LOSS: {train_inv_loss}||   VAL : DYN Loss: {val_dyn_loss} VAE LOSS: {val_vae_loss} INV LOSS: {val_inv_loss}"
+    logger.info(epoch_info)
+    print(epoch_info)
     return model
 
 def setup_model(config):
@@ -96,19 +51,20 @@ def setup_model(config):
     config["dynamics"]["discrete_actions"] =  True#config["env"]["discrete_all_sprite_mover"]
 
     encoder_decoder = hydra.utils.instantiate(config["encoder_decoder"]).to(config["device"])#PatchVAE(**patch_vae).to(self.device)
-
+    encoder_decoder.load_state_dict(torch.load(config["encoder_decoder_path"],map_location=config["device"]))
+    
     config["dynamics"]["in_features"] = config["encoder_decoder"]["embed_dim"]
     config["dynamics"]["num_patches"] = encoder_decoder.num_patches
     print(f"The encoder ouputs {encoder_decoder.num_patches} patches")
 
     dynamics_model = hydra.utils.instantiate(config["dynamics"]).to(config["device"])
-    
+
     #inverse["encoder"]["in_channels"] = patch_dim 
     
     config["inverse"]["encoder"]["in_channels"] = config["encoder_decoder"]["embed_dim"] * 2
     config["inverse"]["mlp"]["input_size"] = config["inverse"]["encoder"]["channels"][-1]*encoder_decoder.num_patches
     config["inverse"]["mlp"]["output_size"] = config["dynamics"]["num_actions"] * config["dynamics"]["action_dim"]
-    print(config["inverse"])
+    
     inverse_model = hydra.utils.instantiate(config["inverse"]).to(config["device"])
     
     model = PatchModel(encoder_decoder=encoder_decoder,dynamics=dynamics_model,inverse=inverse_model,
@@ -118,29 +74,23 @@ def setup_model(config):
                        device=config["device"])
     return model
 
-@hydra.main(config_path="configs", config_name="train_patch_model")
+@hydra.main(config_path="configs", config_name="test_patch_model")
 def main(config):
     
     print("Training with config: {}".format(config))
     
     data_path = "{}/data/visual_{}transitions_{}_{}_{}_{}{}.npz".format(get_original_cwd(),config["env"]["num_transitions"],config["env"]["num_sprites"],("all_sprite_mover"if config["env"]["all_sprite_mover"] else "one_sprite_mover" if config["env"]["one_sprite_mover"] else  "discrete_all_sprite_mover" if config["env"]["discrete_all_sprite_mover"] else "select_move"),config["env"]["random_init_places"],config["env"]["num_action_repeat"],("instantmove" if config["env"]["instant_move"] else ""))
-    dataset = SequenceImageTransitionDataset(data_path=data_path,onehot_action=False,sequence_length=2)#config["env"]["discrete_all_sprite_mover"])
-    num_actions = dataset[0][1].shape[1]
+    test_dataset = SequenceImageTransitionDataset(data_path=data_path,onehot_action=False,sequence_length=2)#config["env"]["discrete_all_sprite_mover"])
+    num_actions = test_dataset[0][1].shape[1]
     config["dynamics"]["num_actions"] = num_actions
+    
+    encoder_decoder_conf = OmegaConf.load(os.path.join(os.path.dirname(config["encoder_decoder_path"]), ".hydra/config.yaml"))["encoder_decoder"]
+    config["encoder_decoder"] = encoder_decoder_conf
     model = setup_model(config)
     
-    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [int(len(dataset)*0.8), len(dataset)-int(len(dataset)*0.8)])
-
-    train_dataloader = DataLoader(train_dataset,batch_size=config["train_loop"]["batch_size"],shuffle=True,num_workers=config["train_loop"]["num_workers"])
-    val_dataloader = DataLoader(val_dataset,batch_size=config["train_loop"]["batch_size"],shuffle=False,num_workers=config["train_loop"]["num_workers"])
+    test_dataloader = DataLoader(test_dataset,batch_size=16,shuffle=True,num_workers=config["num_workers"])
     
-    params_for_optim = model.get_trainable_params()
-    optim_list = []
-    for k in params_for_optim:
-        optim_list.append({"params":params_for_optim[k],"lr":config["train_loop"]["lr"]})
-    optimizer = torch.optim.Adam(optim_list)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=config["train_loop"]["scheduler_milestones"], gamma=0.2)
-    train(model,optimizer,train_dataloader,val_dataloader,config["train_loop"]["num_epochs"],scheduler)
+    test(model,test_dataloader)
     print("Training Done")
     
     
