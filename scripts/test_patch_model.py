@@ -9,18 +9,25 @@ from src.datasets import SequenceImageTransitionDataset
 from hydra.utils import get_original_cwd
 from collections import defaultdict
 from omegaconf import  OmegaConf
+import einops
+import torch.nn.functional as F
 
 logger = logging.getLogger(__name__)
 import os
 
 def val_epoch(model,dataloader):
     model.eval()
-    
     epoch_loss_dict = defaultdict(float)
     total_loss = 0
     with torch.no_grad():
         for _, batch in enumerate(dataloader):
-            loss,  loss_dict = model(batch)
+            obs = batch[0].to(model.device)
+            t_obs = einops.rearrange(obs, "b t c h w -> (b t) c h w")
+            recons = model.encoder_decoder.reconstruct_with_mu(t_obs)
+            #print(recons.shape)
+            patches = einops.rearrange(t_obs, "b c (h p1) (w p2) -> (b h w) c p1 p2", p1=model.encoder_decoder.patch_size, p2=model.encoder_decoder.patch_size)
+            loss = F.mse_loss(recons, patches/255.)
+            loss_dict = {"recons_loss": loss}
             for k in loss_dict:
                 epoch_loss_dict[k] += float(loss_dict[k])
             total_loss += float(loss)
@@ -91,7 +98,7 @@ def main(config):
     test_dataloader = DataLoader(test_dataset,batch_size=16,shuffle=True,num_workers=config["num_workers"])
     
     test(model,test_dataloader)
-    print("Training Done")
+    print("Testing Done")
     
     
 if __name__ == "__main__":

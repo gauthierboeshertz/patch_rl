@@ -1,6 +1,5 @@
 defaults:
-    - encoder_decoder: vae
-    - dynamics: attention_dynamics
+    - encoder_decoder: vae 
     - inverse: cnn
 
 device: "cpu"
@@ -8,24 +7,25 @@ device: "cpu"
 loss_weights:
     dyn_loss_weight: 0
     vae_loss_weight: 1 
-    inverse_loss_weight: 0
-
+    inverse_loss_weight: 0.001
+    
 env:
     num_transitions: 50000
     num_sprites: 4
-    all_sprite_mover: False
+    all_sprite_mover: True
     one_sprite_mover: False
-    discrete_all_sprite_mover: True
+    discrete_all_sprite_mover: False
     random_init_places: True
     num_action_repeat: 4
-    instant_move: False
+    instant_move: True
+    dont_show_targets: True
     
 train_loop:
-    batch_size: 8
-    num_epochs: 200
+    batch_size: 16
+    num_epochs: 100
     num_workers: 3
     lr: 0.0001
-    scheduler_milestones: [100,150]
+    scheduler_milestones: [50,75]
 
 hydra:
     run:

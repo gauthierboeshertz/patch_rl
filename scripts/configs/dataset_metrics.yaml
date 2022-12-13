@@ -1,9 +1,0 @@
-num_transitions: 10000
-num_sprites: 4
-all_sprite_mover: False
-one_sprite_mover: False
-discrete_all_sprite_mover: True
-random_init_places: True
-num_action_repeat: 4
-instant_move: False
-visual_obs: True

@@ -1,12 +1,12 @@
 defaults:
     - encoder_decoder: vae
     - dynamics: attention_dynamics
-    - inverse: cnn
 
 device: "cpu"
-num_workers: 3
+num_workers: 1
 encoder_decoder_path : -1
-dynamics_model_path : "/cluster/home/gboeshertz/patch_rl/outputs/dynamics/patch_vae/2022.11.10/114646/best_val_dynamics.pt"
+
+dynamics_model_path : "/cluster/home/gboeshertz/patch_rl/outputs/dynamics/patch_vae/2022.11.26/152300/best_val_dynamics.pt"
 
 loss_weights:
     dyn_loss_weight: 0
@@ -14,15 +14,17 @@ loss_weights:
     inverse_loss_weight: 0
 
 env:
-    num_transitions: 150
+    num_transitions: 10000
     num_sprites: 4
-    all_sprite_mover: False
+    all_sprite_mover: True
     one_sprite_mover: False
-    discrete_all_sprite_mover: True
-    random_init_places: True
-    num_action_repeat: 4
-    instant_move: False
-    
+    discrete_all_sprite_mover: False
+    random_init_places: False
+    num_action_repeat: 2
+    instant_move: True
+    dont_show_targets: True
+
+
 hydra:
     run:
         dir: outputs/test_dynamics/${encoder_decoder.name}/${now:%Y.%m.%d}/${now:%H%M%S}/

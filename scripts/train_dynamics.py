@@ -25,12 +25,13 @@ def train_epoch(model, encoder_decoder,optimizer, dataloader,device):
     total_loss = 0
     epoch_loss_dict = defaultdict(float)
     for _, batch in enumerate(dataloader):
+        
         optimizer.zero_grad()
         
         loss, loss_dict = model.compute_loss(batch,encoder_decoder)
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 5)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 2.0)
         optimizer.step()
         for k in loss_dict:
             epoch_loss_dict[k] += float(loss_dict[k])
@@ -89,39 +90,46 @@ def train(model, encoder_decoder,optimizer, train_dataloader, val_dataloader, nu
     info_bar.finish()
     return model
 
-def encodings_dataset(encoder_decoder, dataloader, use_gt_masks=False,device="cpu"):
+def encodings_dataset(encoder_decoder, dataloader, save_obs=False,device="cpu"):
     
+    all_obs = []
     obs_encodings = []
     actions = []
-    if use_gt_masks:
-        gt_masks = []
+    rewards = []
+    #if use_gt_masks:
+    #    gt_masks = []
+        
     for i, batch in enumerate(dataloader):
-        obs,action,_,_ = batch
+        obs,action,_,reward = batch
         obs = obs.to(device)
         action = action.to(device)
         t_obs = einops.rearrange(obs, "b t c h w -> (b t) c h w")
         encodings = encoder_decoder.get_encoding_for_dynamics(t_obs)
         encodings = einops.rearrange(encodings, "(b t n) c -> b t n c", b = action.shape[0],t=action.shape[1])
         
+        """
         if use_gt_masks:
             t_gt_mask = []
             for t in range(action.shape[1]-1):
                 t_gt_mask.append(make_gt_causal_mask(obs[:,t:t+2],action[:,t],patch_size=encoder_decoder.patch_size,num_sprites=4).cpu())
             t_gt_mask = torch.stack(t_gt_mask,dim=1)
             gt_masks.append(t_gt_mask.cpu())
+        """
+        rewards.append(reward.cpu())
         obs_encodings.append(encodings.cpu())
         actions.append(action.cpu())
-    
-    if not use_gt_masks:
-        return torch.cat(obs_encodings,dim=0).detach().cpu(),torch.cat(actions,dim=0).detach().cpu()
+        all_obs.append(obs.cpu())
+        
+    if save_obs:
+        return torch.cat(obs_encodings,dim=0).detach().cpu(),torch.cat(actions,dim=0).detach().cpu(),torch.cat(all_obs,dim=0).detach().cpu()
     else:
-        return torch.cat(obs_encodings,dim=0).detach().cpu(),torch.cat(actions,dim=0).detach().cpu(),torch.cat(gt_masks,dim=0).detach().cpu()
-
+        return torch.cat(obs_encodings,dim=0).detach().cpu(),torch.cat(actions,dim=0).detach().cpu(), torch.cat(rewards,dim=0).cpu()
+        
 def setup_models(config):
     
     config["encoder_decoder"]["in_channels"] = (3 if (config["env"]["instant_move"] or config["env"]["discrete_all_sprite_mover"]) else 9)
     print(config["encoder_decoder"]["in_channels"])
-    config["dynamics"]["discrete_actions"] =  True#config["env"]["discrete_all_sprite_mover"]
+    config["dynamics"]["discrete_actions"] =  config["env"]["discrete_all_sprite_mover"]
 
     encoder_decoder = hydra.utils.instantiate(config["encoder_decoder"]).to(config["device"])#PatchVAE(**patch_vae).to(self.device)
     encoder_decoder.load_state_dict(torch.load(config["encoder_decoder_path"],map_location=config["device"]))
@@ -139,31 +147,31 @@ def main(config):
     
     print("Training with config: {}".format(config))
     
-    data_path = "{}/data/visual_{}transitions_{}_{}_{}_{}{}.npz".format(get_original_cwd(),config["env"]["num_transitions"],config["env"]["num_sprites"],("all_sprite_mover"if config["env"]["all_sprite_mover"] else "one_sprite_mover" if config["env"]["one_sprite_mover"] else  "discrete_all_sprite_mover" if config["env"]["discrete_all_sprite_mover"] else "select_move"),config["env"]["random_init_places"],config["env"]["num_action_repeat"],("instantmove" if config["env"]["instant_move"] else ""))
+    data_path = "{}/data/visual_{}transitions_{}_{}_{}_{}{}{}.npz".format(get_original_cwd(),config["env"]["num_transitions"],config["env"]["num_sprites"],("all_sprite_mover"if config["env"]["all_sprite_mover"] else "one_sprite_mover" if config["env"]["one_sprite_mover"] else  "discrete_all_sprite_mover" if config["env"]["discrete_all_sprite_mover"] else "select_move"),config["env"]["random_init_places"],config["env"]["num_action_repeat"],("instantmove" if config["env"]["instant_move"] else ""),("no_targets" if config["env"]["dont_show_targets"] else ""))
     dataset = SequenceImageTransitionDataset(data_path=data_path,onehot_action=False,sequence_length=3)#config["env"]["discrete_all_sprite_mover"])
     num_actions = dataset[0][1].shape[1]
     config["dynamics"]["num_actions"] = num_actions
     config["dynamics"]["device"] = config["device"]
+    config["dynamics"]["num_rewards"] = dataset.num_rewards
     encoder_decoder_conf = OmegaConf.load(os.path.join(os.path.dirname(config["encoder_decoder_path"]), ".hydra/config.yaml"))["encoder_decoder"]
 
     config["encoder_decoder"] = encoder_decoder_conf
     encoder_decoder, dynamics = setup_models(config)
     
     encoder_decoder.eval()
+
     for param in encoder_decoder.parameters():
         param.requires_grad = False
-    
+        
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [int(len(dataset)*0.8), len(dataset)-int(len(dataset)*0.8)])
-    train_dataloader = DataLoader(train_dataset,batch_size=8,shuffle=True,num_workers=config["train_loop"]["num_workers"])
-    val_dataloader = DataLoader(val_dataset,batch_size=8,shuffle=False,num_workers=config["train_loop"]["num_workers"])
+    train_dataloader = DataLoader(train_dataset,batch_size=128,shuffle=True,num_workers=config["train_loop"]["num_workers"])
+    val_dataloader = DataLoader(val_dataset,batch_size=128,shuffle=False,num_workers=config["train_loop"]["num_workers"])
     
     print("Creating the encodings dataset")
     with torch.no_grad():
-        train_encodings_dataset = encodings_dataset(encoder_decoder, train_dataloader,config["dynamics"]["use_gt_mask"], config["device"])
-        val_encodings_dataset = encodings_dataset(encoder_decoder, val_dataloader,config["dynamics"]["use_gt_mask"], config["device"])
+        train_encodings_dataset = encodings_dataset(encoder_decoder, train_dataloader,save_obs=config["recons_loss"],device= config["device"])
+        val_encodings_dataset = encodings_dataset(encoder_decoder, val_dataloader,save_obs=config["recons_loss"],device=config["device"])
     
-    train_obs = torch.stack([train_dataset[b][0] for b in range(len(train_dataset))],dim=0)
-    val_obs = torch.stack([val_dataset[b][0] for b in range(len(val_dataset))],dim=0)
     del train_dataset
     del val_dataset
     del train_dataloader
@@ -172,16 +180,15 @@ def main(config):
     print("Train encodings shape",train_encodings_dataset[0].shape)
     print("Train actions shape",train_encodings_dataset[1].shape)
     print("Finished creating the encoding dataset, Training the dynamics model now")
-    if not config["recons_loss"]:
-        train_dataset = TensorDataset(*train_encodings_dataset)
-        val_dataset = TensorDataset(*val_encodings_dataset)
-    else:
-        train_dataset = TensorDataset(*train_encodings_dataset, train_obs)
-        val_dataset = TensorDataset(*val_encodings_dataset, val_obs)
+    train_dataset = TensorDataset(*train_encodings_dataset)
+    val_dataset = TensorDataset(*val_encodings_dataset)
+    
     train_dataloader = DataLoader(train_dataset,batch_size=config["train_loop"]["batch_size"],shuffle=True,num_workers=config["train_loop"]["num_workers"])
     val_dataloader = DataLoader(val_dataset,batch_size=config["train_loop"]["batch_size"],shuffle=False,num_workers=config["train_loop"]["num_workers"])
-    optimizer = torch.optim.AdamW(dynamics.parameters(), lr=config["train_loop"]["lr"])
+    
+    optimizer = torch.optim.AdamW( list(dynamics.parameters()) , lr=config["train_loop"]["lr"])
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=config["train_loop"]["scheduler_milestones"], gamma=0.2)
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100,last_epoch=-1,eta_min=1e-5)
     train(dynamics,encoder_decoder if config["recons_loss"] else None, optimizer,train_dataloader,val_dataloader,config["train_loop"]["num_epochs"],config["device"],scheduler)
     print("Training Done")
     

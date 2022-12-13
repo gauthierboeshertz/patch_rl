@@ -1,0 +1,10 @@
+num_sprites: 4
+all_sprite_mover: True
+one_sprite_mover: False
+discrete_all_sprite_mover: False
+random_init_places: True
+instant_move: True
+dont_show_targets: True
+visual_obs: True
+episode_timesteps: 100
+seed: 0

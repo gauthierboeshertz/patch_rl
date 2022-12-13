@@ -5,7 +5,7 @@ defaults:
 
 device: "cpu"
 num_workers: 3
-encoder_decoder_path : "/cluster/home/gboeshertz/patch_rl/outputs/patch_model/patch_vae/2022.11.13/212423/last_encoder_decoder.pt"
+encoder_decoder_path : "/cluster/home/gboeshertz/patch_rl/outputs/patch_model/patch_vae/2022.11.16/101745/last_encoder_decoder.pt"
 
 loss_weights:
     dyn_loss_weight: 0

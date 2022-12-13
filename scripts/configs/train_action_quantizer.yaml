@@ -1,0 +1,29 @@
+defaults:
+    - env: spriteworld
+
+device: "cpu"                                               
+encoder_decoder_path : "/cluster/home/gboeshertz/patch_rl/outputs/patch_model/patch_vae/2022.11.25/153243/best_val_encoder_decoder.pt"
+
+env:
+    num_transitions: 50000
+    num_sprites: 4
+    all_sprite_mover: True
+    one_sprite_mover: False
+    discrete_all_sprite_mover: False
+    random_init_places: True
+    num_action_repeat: 4
+    instant_move: True
+    dont_show_targets: True
+
+    
+train_loop:
+    batch_size: 64
+    num_epochs: 300
+    num_workers: 1
+    lr: 0.0001
+    scheduler_milestones: [100,150]
+
+
+hydra:
+    run:
+        dir: outputs/action_quant/${now:%Y.%m.%d}/${now:%H%M%S}/

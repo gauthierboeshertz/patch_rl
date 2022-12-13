@@ -1,5 +1,5 @@
-name: patch_vae
-_target_: src.patch_vae.PatchVAE
+name: patch_swae
+_target_: src.patch_swae.PatchSWAE
 patch_size: 16
 in_channels: 3
 embed_dim: 256
@@ -7,10 +7,8 @@ channels: [64,128,256] #[64,64,128,256]
 kernel_sizes: [3,3,3] #[3,3,3,3]
 paddings: [1,1,1]
 strides: [2,2,2] #[2,3,2,2]
-kld_weight: 0.001
-loss_type: 'B'
-gamma: 30.0
-max_capacity: 50
-Capacity_max_iter: 500000
-beta: 4
 norm_type: gn
+reg_weight: 100
+wasserstein_deg: 2.
+num_projections: 50
+projection_dist: normal

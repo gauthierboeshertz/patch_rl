@@ -5,9 +5,6 @@ import torch.nn.functional as F
 import numpy as np
 
 
-
-
-
 class MLP(nn.Module):
     def __init__(self, input_size, output_size,layer_sizes = [], activation=nn.ReLU):
         super(MLP, self).__init__()
@@ -333,6 +330,9 @@ class PatchConv2dModel(torch.nn.Module):
         
         return self.conv(input)
 
+def GroupNorm(in_channels: int) -> nn.Module:
+    return torch.nn.GroupNorm(num_groups=32, num_channels=in_channels, eps=1e-6, affine=True)
+
 class VAE_Encoder(nn.Module):
     
     def __init__(self,
@@ -340,10 +340,19 @@ class VAE_Encoder(nn.Module):
         channels,
         kernel_sizes,
         strides,
-        paddings):
+        paddings,
+        norm_type="bn"):
         super().__init__()
         modules = []
         in_chan = in_channels
+        
+        if norm_type == "bn":
+            norm_layer = nn.BatchNorm2d
+        elif norm_type == "gn":
+            norm_layer = GroupNorm
+        else:
+            raise ValueError("Invalid norm_type: {}".format(norm_type))
+        
         for chan, kern, stri,padd, in zip(channels,kernel_sizes,strides,paddings):
             modules.append(
                 nn.Sequential(
@@ -351,7 +360,7 @@ class VAE_Encoder(nn.Module):
                               kernel_size=kern,stride=stri,
                               padding=padd,bias=False),#bias set to false since batcchnorm does  input - mean(input)
                                # kernel_size= 3, stride= 2, padding  = 1),
-                    nn.BatchNorm2d(chan),
+                    norm_layer(chan),
                     nn.LeakyReLU())
             )
             in_chan = chan
@@ -363,17 +372,27 @@ class VAE_Encoder(nn.Module):
         x = self.encoder(x)
         return x
 
+
 class VAE_Decoder(nn.Module):
     def __init__(self,
                 channels,
                 kernel_sizes,
                 strides,
                 paddings,
+                norm_type="bn",
                 out_dim=-1):
         super().__init__()
 
         modules = []
         in_chan = channels[0]
+
+        if norm_type == "bn":
+            norm_layer = nn.BatchNorm2d
+        elif norm_type == "gn":
+            norm_layer = GroupNorm
+        else:
+            raise ValueError("Invalid norm_type: {}".format(norm_type))
+
         for chan, kern, stri,padd, in zip(channels,kernel_sizes,strides,paddings):
             modules.append(
                 nn.Sequential(
@@ -384,7 +403,7 @@ class VAE_Decoder(nn.Module):
                                        padding=padd,
                                        output_padding=1,
                                        bias=False),
-                    nn.BatchNorm2d(chan),
+                    norm_layer(chan),
                     nn.LeakyReLU())
             )
             in_chan = chan

@@ -33,7 +33,43 @@ class ImageTransitionDataset(Dataset):
     
     
     def __getitem__(self, idx):
-        return self.observations[idx], self.actions[idx], self.next_observations[idx], self.rewards[idx]
+        return self.observations[idx], self.actions[idx], self.next_observations[idx], self.rewards[idx], self.dones[idx]
+
+
+
+class TransitionMaskDataset(Dataset):
+    def __init__(self, observations,actions,next_observations, mask_function,rewards=None) -> None:
+        """
+        __init__ load a transition dataset, getting an item results in getting one transition,
+                    i.e a tuple of (obs, action, next_obs, reward,done)
+
+        _extended_summary_
+
+        Args:
+            data_path (str): path of a npz file containing the dataset
+        """        
+        super(ImageTransitionDataset).__init__()
+        self.obs = observations
+        self.actions = actions
+        self.next_obs = next_observations
+        self.mask_function = mask_function
+        self.rewards = rewards
+
+
+    def _create_mask(self):
+        masks = []
+        batch_size = 100
+        for batch_idx in range(0,self.obs.shape[0],batch_size):
+            max_idx = min(batch_idx+batch_size,self.obs.shape[0])
+            masks.append(self.mask_function(self.obs[batch_idx:max_idx],self.actions[batch_idx:max_idx],self.next_obs[batch_idx:max_idx]))
+        
+        
+    def __len__(self):
+        return self.observations.shape[0]
+    
+    
+    def __getitem__(self, idx):
+        return self.observations[idx], self.actions[idx], self.next_observations[idx], self.rewards[idx], self.dones[idx]
 
 
 class SequenceImageTransitionDataset(Dataset):
@@ -77,7 +113,21 @@ class SequenceImageTransitionDataset(Dataset):
         assert self.observations.shape[0] == self.actions.shape[0] == self.next_observations.shape[0] == self.rewards.shape[0] == len(self.valid_transitions_indices)
         if onehot_action:
             self.actions = nn.functional.one_hot(self.actions.long(),num_classes=4).float().permute(0,1,3,2)
+        self._classify_rewards()
         
+    def _classify_rewards(self):
+        """
+        _classify_rewards 
+
+        _extended_summary_
+        """
+        all_rewards = torch.unique(self.rewards)
+        self.num_rewards = len(all_rewards)
+        for reward_idx, reward in enumerate(all_rewards):
+            print(f"reward {reward} has {torch.sum(self.rewards == reward)} transitions")
+            self.rewards[self.rewards == reward] = reward_idx
+        
+            
     def _get_valid_indices(self):
         """
         make_episodes  make episode by adding indices to episode list using dones,
@@ -145,8 +195,6 @@ class SequenceImageTransitionDataset(Dataset):
         else:
             return torch.stack(all_obs), torch.stack(all_actions), torch.stack(all_next_obs), torch.stack(all_rewards)#torch.stack(obs).float(), torch.stack(actions).float(), torch.stack(next_obs).float(), torch.stack(rewards).float()
 
-        
-        
         
     def __getitem__(self, idx):
         

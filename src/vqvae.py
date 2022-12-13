@@ -68,6 +68,9 @@ class VQVAE(nn.Module):
         shape = x.shape  # (..., C, H, W)
         x = x.view(-1, *shape[-3:])
         z = self.encoder(x)
+        
+        print("encoder output",z.shape)
+        
         z = self.pre_quant_conv(z)
         b, e, h, w = z.shape
         z_flattened = rearrange(z, 'b e h w -> (b h w) e')
@@ -87,7 +90,9 @@ class VQVAE(nn.Module):
         shape = z_q.shape  # (..., E, h, w)
         z_q = z_q.view(-1, *shape[-3:])
         z_q = self.post_quant_conv(z_q)
+        print("decoder input",z_q.shape)
         rec = self.decoder(z_q)
+        print("decoder output",rec.shape)
         rec = rec.reshape(*shape[:-3], *rec.shape[1:])
         if should_postprocess:
             rec = self.postprocess_output(rec)

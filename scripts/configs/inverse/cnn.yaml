@@ -12,3 +12,5 @@ mlp:
     input_size: -1
     layer_sizes : [256,128,64]
     output_size: -1
+num_actions: -1
+discrete_action_space: -1

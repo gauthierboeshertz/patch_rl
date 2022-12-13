@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 def patches_to_image(patches, patch_size, image_size):
     # transform batch of patches to image for square images and square patches
-    image = torch.zeros((patches.shape[0],patches.shape[2],image_size,image_size))
+    image = torch.zeros((patches.shape[0],patches.shape[2],image_size,image_size)).to(patches.device)
     num_patch_row = image_size // patch_size
     for i in range(num_patch_row):
         for j in range(num_patch_row):

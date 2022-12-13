@@ -1,0 +1,32 @@
+defaults:
+    - dynamics: attention_dynamics
+    - encoder_decoder: vae
+    - env: spriteworld
+
+seed: 0
+device: "cpu"                                               
+dynamics_model_path : "/cluster/home/gboeshertz/patch_rl/outputs/dynamics/patch_vae/2022.11.28/163030/best_val_dynamics.pt"
+
+learn_timesteps: 300000
+encoder_decoder_path: "/cluster/home/gboeshertz/patch_rl/outputs/patch_model/patch_vae/2022.11.25/153243/best_val_encoder_decoder.pt"
+
+feature_extractor: "nature_cnn"
+
+
+replay_buffer:
+  mask_function: None
+  reward_function: None
+  num_patches: 64
+  patch_size: [16,16]
+  use_gt_mask: True
+  use_gt_reward: True
+  coda_minimum_size: 1000
+  coda_buffer_size: 10000
+  coda_batch_ratio: 0.5
+  group_actions: True
+
+
+
+hydra:
+    run:
+        dir: outputs/train_agent/${env.num_sprites}/${now:%Y.%m.%d}/${now:%H%M%S}/
