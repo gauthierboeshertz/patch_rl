@@ -1,0 +1,36 @@
+Sender: LSF System <lsfadmin@eu-c7-104-16>
+Subject: Job 251499966: <--gpus=1 --time=3:20:00 --mem-per-cpu=20G "wrap=python3 scripts.gather_env_transitions"> in cluster <euler> Exited
+
+Job <--gpus=1 --time=3:20:00 --mem-per-cpu=20G "wrap=python3 scripts.gather_env_transitions"> was submitted from host <eu-login-19> by user <gboeshertz> in cluster <euler> at Tue Dec 13 18:19:28 2022
+Job was executed on host(s) <5*eu-c7-104-16>, in queue <normal.4h>, as user <gboeshertz> in cluster <euler> at Tue Dec 13 18:19:39 2022
+</cluster/home/gboeshertz> was used as the home directory.
+</cluster/scratch/gboeshertz/patch_rl> was used as the working directory.
+Started at Tue Dec 13 18:19:39 2022
+Terminated at Tue Dec 13 18:19:41 2022
+Results reported at Tue Dec 13 18:19:41 2022
+
+Your job looked like:
+
+------------------------------------------------------------
+# LSBATCH: User input
+--gpus=1 --time=3:20:00 --mem-per-cpu=20G "wrap=python3 scripts.gather_env_transitions"
+------------------------------------------------------------
+
+Exited with exit code 127.
+
+Resource usage summary:
+
+    CPU time :                                   0.21 sec.
+    Max Memory :                                 6 MB
+    Average Memory :                             -
+    Total Requested Memory :                     5120.00 MB
+    Delta Memory :                               5114.00 MB
+    Max Swap :                                   -
+    Max Processes :                              -
+    Max Threads :                                -
+    Run time :                                   7 sec.
+    Turnaround time :                            13 sec.
+
+The output (if any) follows:
+
+/cluster/shadow/.lsbatch/1670951968.251499966: line 8: --gpus=1: command not found

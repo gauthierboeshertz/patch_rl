@@ -91,13 +91,4 @@ class CodaDataset(torch.utils.data.Dataset):
 
     def save(self, path):
         np.savez(path, observations=self.observations, actions=self.actions, next_observations=self.next_observations, rewards=self.rewards, dones=self.dones)
-        import json
-        cccss = self.ccs
-        for ccs in cccss:
-            for cc in ccs:
-                for key in cc.keys():
-                    cc[key] = [ int(v) for v in cc[key] ]
-                    
-        with open(path.replace("npz","json"), "w") as outfile:
-            json.dump(self.ccs, outfile)
 

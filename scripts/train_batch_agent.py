@@ -23,6 +23,7 @@ from src.d3rl_feature_extractor import PatchCNNFactory
 from hydra.utils import get_original_cwd, to_absolute_path
 import numpy as np
 
+
 class _IgnoreTensorboardPathNotFound(logging.Filter):
     def filter(self, record):
         assert record.name == "tensorboard"
@@ -41,23 +42,31 @@ class ImageReshaper(gym.ObservationWrapper):
     def observation(self, observation):
         return observation.transpose(2, 0, 1)
 
-def transitiondataset_to_mdpdataset(dataset):
-    terminals = dataset.dones * (dataset.rewards>0)
-    timeouts = dataset.dones * (dataset.rewards<=0)
+
+def n_transition_list(dataset,n_transitions):
     
-    print("Number of transitions: ",dataset.observations.shape[0])
-    print("Number of terminal states: ",terminals.sum())
-    print("Number of timeout states: ",timeouts.sum())
-    dataset = d3rlpy.dataset.MDPDataset(dataset.observations.numpy(),
-                     dataset.actions.numpy(),
-                     dataset.rewards.numpy(),
-                     terminals.numpy(),
-                     #episode_terminals= timeouts.numpy(), 
-                     discrete_action=False)
+    transition_list = []
     
-    print("Dataset size: ",len(dataset))
-    print("data stats",dataset.compute_stats())
-    return dataset
+    n_obs = dataset.observations[:n_transitions].numpy()
+    n_actions = dataset.actions[:n_transitions].numpy()
+    n_next_obs = dataset.next_observations[:n_transitions].numpy()
+    n_rewards = dataset.rewards[:n_transitions].numpy()
+    n_dones = dataset.dones[:n_transitions].numpy()
+    
+    terminals = n_dones * (n_rewards>0)
+    for i in range(0,n_obs.shape[0]):
+        trans = d3rlpy.dataset.Transition(observation_shape=list(n_obs[i].shape),
+                                          action_size=n_actions[i].shape[0],
+                                          observation=n_obs[i],
+                                          action=n_actions[i],
+                                          reward=n_rewards[i],
+                                          next_observation=n_next_obs[i],
+                                          terminal=terminals[i])
+        transition_list.append(trans)
+    
+    return transition_list
+        
+    
 
 def setup_models_for_mask(config,num_actions=4):
     
@@ -111,8 +120,7 @@ def setup_dataset(config,env):
 
     coda_data_path = f"{get_original_cwd()}/{config.coda_dataset_path}"
     if config.load_dataset:
-        
-        mdp_dataset = transitiondataset_to_mdpdataset(ImageTransitionDataset(coda_data_path))
+        coda_dataset = ImageTransitionDataset(coda_data_path)
         
     else:
         
@@ -132,9 +140,11 @@ def setup_dataset(config,env):
                                    num_actions=env.action_space._shape[0],num_patches=config.dataset.num_patches)
         if config.dataset.save_coda_dataset:
             coda_dataset.save(coda_data_path)
-        mdp_dataset = transitiondataset_to_mdpdataset(coda_dataset)
+            
+    transition_list = n_transition_list(coda_dataset,n_transitions=config.dataset.num_transitions)
+    #transitiondataset_to_mdpdataset(coda_dataset)
     
-    return mdp_dataset        
+    return transition_list        
 
 @hydra.main(config_path="configs", config_name="train_batch_agent")
 def main(config):
@@ -171,11 +181,11 @@ def main(config):
         raise AssertionError("Unknown feature extractor")
     
 
-    #run = wandb.init(project=f"batch_spriteworld_{config.env.num_sprites}_sprites", entity="gboeshertz", sync_tensorboard=True,
-    #                 config=OmegaConf.to_container(config,resolve=True),settings=wandb.Settings(start_method="thread"))
+    run = wandb.init(project=f"batch_spriteworld_{config.env.num_sprites}_sprites", entity="gboeshertz", sync_tensorboard=True,
+                     config=OmegaConf.to_container(config,resolve=True),settings=wandb.Settings(start_method="thread"))
     
-    #wandb.run.name = f"{config.feature_extractor}_{wandb.run.name}"
-    #wandb.run.save()
+    wandb.run.name = f"{config.feature_extractor}_{wandb.run.name}"
+    wandb.run.save()
     # prepare algorithm
     agent = d3rlpy.algos.TD3PlusBC(use_gpu=torch.cuda.is_available(),
                                    actor_encoder_factory=encoder_factory,
@@ -190,9 +200,10 @@ def main(config):
     agent.fit(
         dataset,
         eval_episodes=dataset,
-        n_epochs=100,
+        n_epochs=200,
+        with_timestamp=False,
         scorers={
-        'environment': d3rlpy.metrics.evaluate_on_environment(eval_env,n_trials=10)},
+        'eval_environment': d3rlpy.metrics.evaluate_on_environment(eval_env,n_trials=10)},
         tensorboard_dir='runs')
 
     run.finish()

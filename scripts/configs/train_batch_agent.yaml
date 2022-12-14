@@ -1,6 +1,7 @@
 defaults:
     - dynamics: attention_dynamics
     - encoder_decoder: vae
+    - env: spriteworld
 
 seed: 0
 device: "cpu"                                               
@@ -10,20 +11,10 @@ learn_timesteps: 300000
 encoder_decoder_path: "/cluster/home/gboeshertz/patch_rl/outputs/patch_model/patch_vae/2022.11.25/153243/best_val_encoder_decoder.pt"
 feature_extractor: "nature_cnn"
 
-load_dataset: False
-coda_dataset_path: "data/coda_attempt.npz"
+load_dataset: True
+coda_dataset_path: /data/expert_visual_112transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz  #"data/coda_attempt.npz"
 dataset_path: "data/expert_visual_112transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz"
 
-env:
-    num_sprites: 4
-    all_sprite_mover: True
-    one_sprite_mover: False
-    discrete_all_sprite_mover: False
-    random_init_places: True
-    instant_move: True
-    dont_show_targets: True
-    visual_obs: True
-    episode_timesteps: 100
 
 dataset:
   mask_function: None
@@ -35,7 +26,7 @@ dataset:
   max_coda_transitions: 100
   group_actions: True 
   save_coda_dataset: True
-
+  num_transitions: -1
 hydra:
     run:
         dir: outputs/train_batch_agent/${env.num_sprites}/${now:%Y.%m.%d}/${now:%H%M%S}/
