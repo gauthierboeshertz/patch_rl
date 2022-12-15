@@ -22,6 +22,7 @@ from src.datasets import ImageTransitionDataset
 from src.d3rl_feature_extractor import PatchCNNFactory
 from hydra.utils import get_original_cwd, to_absolute_path
 import numpy as np
+from d3rlpy.metrics.scorer import initial_state_value_estimation_scorer
 
 
 class _IgnoreTensorboardPathNotFound(logging.Filter):
@@ -52,7 +53,22 @@ def n_transition_list(dataset,n_transitions):
     n_next_obs = dataset.next_observations[:n_transitions].numpy()
     n_rewards = dataset.rewards[:n_transitions].numpy()
     n_dones = dataset.dones[:n_transitions].numpy()
-    
+
+    if np.isnan(n_obs).any():
+        print("Nan in obs")
+    if np.isnan(n_actions).any():
+        print("Nan in actions")
+    if np.isnan(n_next_obs).any():
+        print("Nan in obs")
+    if np.isnan(n_rewards).any():
+        print("Nan in rewards")
+    if np.isnan(n_dones).any():
+        print("Nan in n_dones")
+
+    print(f"n_obs shape: {n_obs.shape}")
+    print("Rewards stats: ",np.min(n_rewards),np.max(n_rewards),np.mean(n_rewards),np.std(n_rewards))
+    print("Actions stats: ",np.min(n_actions),np.max(n_actions),np.mean(n_actions),np.std(n_actions))
+
     terminals = n_dones * (n_rewards>0)
     for i in range(0,n_obs.shape[0]):
         trans = d3rlpy.dataset.Transition(observation_shape=list(n_obs[i].shape),
@@ -64,6 +80,7 @@ def n_transition_list(dataset,n_transitions):
                                           terminal=terminals[i])
         transition_list.append(trans)
     
+    print(f"Transition list length: {len(transition_list)}")
     return transition_list
         
     
@@ -120,8 +137,8 @@ def setup_dataset(config,env):
 
     coda_data_path = f"{get_original_cwd()}/{config.coda_dataset_path}"
     if config.load_dataset:
+        print(f"Loading dataset from {coda_data_path}")
         coda_dataset = ImageTransitionDataset(coda_data_path)
-        
     else:
         
         if not config.dataset.use_gt_mask:
@@ -146,6 +163,14 @@ def setup_dataset(config,env):
     
     return transition_list        
 
+def no_grad_eval(eval_env,n_trials):
+    print("BRR")
+    eval_func = d3rlpy.metrics.evaluate_on_environment(eval_env,n_trials=n_trials)
+    def no_grad(algo,episodes):
+        with torch.no_grad():
+            return eval_func(algo,episodes)
+    return no_grad
+
 @hydra.main(config_path="configs", config_name="train_batch_agent")
 def main(config):
     
@@ -157,7 +182,7 @@ def main(config):
                                                             one_sprite_mover=config.env.one_sprite_mover,
                                                             all_sprite_mover=config.env.all_sprite_mover,
                                                             discrete_all_sprite_mover=config.env.discrete_all_sprite_mover,
-                                                            random_init_places=config.env.random_init_places,
+                                                            random_init_places=True,
                                                             visual_obs = True,
                                                             instant_move = config.env.instant_move,
                                                             action_scale=0.05,
@@ -173,23 +198,23 @@ def main(config):
     
     print("Replay buffer kwargs")
     if config.feature_extractor == "patch_cnn":
-        cnn_dowsample = Conv2dModel(in_channels=3, channels=[64,128,64,32],kernel_sizes=[5,3,3,3],strides=[2,2,2,2],paddings=[1,1,1,1],norm_type="gn")
-        encoder_factory = PatchCNNFactory(cnn_downsample=cnn_dowsample,features_dim=256,patch_size=16)
+        encoder_factory = PatchCNNFactory(feature_dim=256,patch_size=16)
     elif config.feature_extractor == "nature_cnn":
         encoder_factory= "pixel"
     else :
         raise AssertionError("Unknown feature extractor")
     
 
-    run = wandb.init(project=f"batch_spriteworld_{config.env.num_sprites}_sprites", entity="gboeshertz", sync_tensorboard=True,
-                     config=OmegaConf.to_container(config,resolve=True),settings=wandb.Settings(start_method="thread"))
+    #run = wandb.init(project=f"batch_spriteworld_{config.env.num_sprites}_sprites", entity="gboeshertz", sync_tensorboard=True,
+    #                 config=OmegaConf.to_container(config,resolve=True),settings=wandb.Settings(start_method="thread"))
     
-    wandb.run.name = f"{config.feature_extractor}_{wandb.run.name}"
-    wandb.run.save()
+    #wandb.run.name = f"{config.feature_extractor}_{wandb.run.name}"
+    #wandb.run.save()
     # prepare algorithm
     agent = d3rlpy.algos.TD3PlusBC(use_gpu=torch.cuda.is_available(),
                                    actor_encoder_factory=encoder_factory,
                                    critic_encoder_factory=encoder_factory,
+                                   batch_size=32,
                                    scaler="pixel")
     # train
     tb_logger = tb_logging.get_logger()
@@ -199,11 +224,11 @@ def main(config):
 
     agent.fit(
         dataset,
-        eval_episodes=dataset,
+        eval_episodes=2,
         n_epochs=200,
         with_timestamp=False,
         scorers={
-        'eval_environment': d3rlpy.metrics.evaluate_on_environment(eval_env,n_trials=10)},
+        'eval_environment': no_grad_eval(eval_env,n_trials=5)},
         tensorboard_dir='runs')
 
     run.finish()

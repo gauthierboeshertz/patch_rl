@@ -12,7 +12,7 @@ encoder_decoder_path: "/cluster/home/gboeshertz/patch_rl/outputs/patch_model/pat
 feature_extractor: "nature_cnn"
 
 load_dataset: True
-coda_dataset_path: /data/expert_visual_112transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz  #"data/coda_attempt.npz"
+coda_dataset_path: /data/expert_visual_10000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz  #"data/coda_attempt.npz"
 dataset_path: "data/expert_visual_112transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz"
 
 

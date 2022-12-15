@@ -28,7 +28,7 @@ def gather_env_transitions(env,num_transitions,trained_agent=None,num_action_rep
                 action_rep += 1
         else:
             action = trained_agent.predict(state)[0][0]
-           # print("Action",action)
+            action = np.clip(action + np.random.normal(0,0.5,size=action.shape).astype(np.float32), env.action_space.low+0.00001, env.action_space.high-0.00001)
             
         next_state, reward, done, _ = env.step(action)
         states.append(state)
@@ -68,18 +68,20 @@ def main(config):
     
     set_random_seed(config["seed"])
     episode_timesteps = 100
-    env_config = bouncing_sprites.get_config(num_sprites=config["num_sprites"],is_demo=False,timeout_steps=episode_timesteps, 
-                                                            contact_reward=True,
-                                                            one_sprite_mover=config["one_sprite_mover"],
-                                                            all_sprite_mover=config["all_sprite_mover"],
-                                                            discrete_all_sprite_mover=config["discrete_all_sprite_mover"],
-                                                            random_init_places=config["random_init_places"],
-                                                            visual_obs = config["visual_obs"],
-                                                            instant_move = config["instant_move"],
-                                                            dont_show_targets=config["dont_show_targets"],
-                                                            disappear_after_contact=True,
-                                                            seed = config["seed"],
-                                                            action_scale=0.05)
+    env_config = bouncing_sprites.get_config(num_sprites=config["num_sprites"],
+                                             is_demo=False,
+                                             timeout_steps=episode_timesteps, 
+                                            contact_reward=True,
+                                            one_sprite_mover=config["one_sprite_mover"],
+                                            all_sprite_mover=config["all_sprite_mover"],
+                                            discrete_all_sprite_mover=config["discrete_all_sprite_mover"],
+                                            random_init_places=config["random_init_places"],
+                                            visual_obs = config["visual_obs"],
+                                            instant_move = config["instant_move"],
+                                            dont_show_targets=config["dont_show_targets"],
+                                            disappear_after_contact=True,
+                                            seed = config["seed"],
+                                            action_scale=0.05)
     
 
     env = environment.Environment(**env_config)
