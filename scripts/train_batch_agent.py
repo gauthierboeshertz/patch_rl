@@ -174,6 +174,7 @@ def no_grad_eval(eval_env,n_trials):
 @hydra.main(config_path="configs", config_name="train_batch_agent")
 def main(config):
     
+    print("Config",config)
     set_random_seed(config["seed"])
     
     print("Evaluation environment")
@@ -205,16 +206,16 @@ def main(config):
         raise AssertionError("Unknown feature extractor")
     
 
-    #run = wandb.init(project=f"batch_spriteworld_{config.env.num_sprites}_sprites", entity="gboeshertz", sync_tensorboard=True,
-    #                 config=OmegaConf.to_container(config,resolve=True),settings=wandb.Settings(start_method="thread"))
+    run = wandb.init(project=f"batch_spriteworld_{config.env.num_sprites}_sprites", entity="gboeshertz", sync_tensorboard=True,
+                     config=OmegaConf.to_container(config,resolve=True),settings=wandb.Settings(start_method="thread"))
     
-    #wandb.run.name = f"{config.feature_extractor}_{wandb.run.name}"
-    #wandb.run.save()
+    wandb.run.name = f"{config.feature_extractor}_{wandb.run.name}"
+    wandb.run.save()
     # prepare algorithm
     agent = d3rlpy.algos.TD3PlusBC(use_gpu=torch.cuda.is_available(),
                                    actor_encoder_factory=encoder_factory,
                                    critic_encoder_factory=encoder_factory,
-                                   batch_size=32,
+                                   batch_size=config.dataset.batch_size,
                                    scaler="pixel")
     # train
     tb_logger = tb_logging.get_logger()
@@ -225,11 +226,12 @@ def main(config):
     agent.fit(
         dataset,
         eval_episodes=2,
-        n_epochs=200,
+        n_epochs=500,
         with_timestamp=False,
         scorers={
-        'eval_environment': no_grad_eval(eval_env,n_trials=5)},
-        tensorboard_dir='runs')
+        'eval_environment': no_grad_eval(eval_env,n_trials=10)},
+        tensorboard_dir='runs',
+        save_interval=500)
 
     run.finish()
 #wandb.finish()
