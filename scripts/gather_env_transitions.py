@@ -28,7 +28,7 @@ def gather_env_transitions(env,num_transitions,trained_agent=None,num_action_rep
                 action_rep += 1
         else:
             action = trained_agent.predict(state)[0][0]
-            action = np.clip(action + np.random.normal(0,0.5,size=action.shape).astype(np.float32), env.action_space.low+0.00001, env.action_space.high-0.00001)
+            action = np.clip(action + np.random.normal(0,0.01,size=action.shape).astype(np.float32), env.action_space.low+0.00001, env.action_space.high-0.00001)
             
         next_state, reward, done, _ = env.step(action)
         states.append(state)

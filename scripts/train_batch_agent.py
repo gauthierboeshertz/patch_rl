@@ -19,7 +19,7 @@ from tensorboard.util import tb_logging
 import wandb
 from src.coda_dataset import CodaDataset
 from src.datasets import ImageTransitionDataset
-from src.d3rl_feature_extractor import PatchCNNFactory
+from src.d3rl_feature_extractor import PatchCNNFactory, PatchVAEFactory
 from hydra.utils import get_original_cwd, to_absolute_path
 import numpy as np
 from d3rlpy.metrics.scorer import initial_state_value_estimation_scorer
@@ -178,7 +178,9 @@ def main(config):
     set_random_seed(config["seed"])
     
     print("Evaluation environment")
-    eval_env_config = bouncing_sprites.get_config(num_sprites=config.env.num_sprites,is_demo=False,timeout_steps=config.env.episode_timesteps, 
+
+    eval_env_config = bouncing_sprites.get_config(num_sprites=config.env.num_sprites,is_demo=False,
+                                                            timeout_steps=config.env.episode_timesteps, 
                                                             contact_reward=True,
                                                             one_sprite_mover=config.env.one_sprite_mover,
                                                             all_sprite_mover=config.env.all_sprite_mover,
@@ -187,7 +189,7 @@ def main(config):
                                                             visual_obs = True,
                                                             instant_move = config.env.instant_move,
                                                             action_scale=0.05,
-                                                            seed=config.seed,
+                                                            seed=config.seed+10,
                                                             disappear_after_contact=True,
                                                             dont_show_targets=config.env.dont_show_targets)
     
@@ -200,19 +202,23 @@ def main(config):
     print("Replay buffer kwargs")
     if config.feature_extractor == "patch_cnn":
         encoder_factory = PatchCNNFactory(feature_dim=256,patch_size=16)
+    elif config.feature_extractor == "patch_vae":
+        encoder_factory = PatchVAEFactory(feature_dim=256,patch_size=16,encoder_decoder_path=config.encoder_decoder_path)
     elif config.feature_extractor == "nature_cnn":
         encoder_factory= "pixel"
     else :
         raise AssertionError("Unknown feature extractor")
     
 
-    run = wandb.init(project=f"batch_spriteworld_{config.env.num_sprites}_sprites", entity="gboeshertz", sync_tensorboard=True,
+    run = wandb.init(project=f"batch_spriteworld_dropout", entity="gboeshertz", sync_tensorboard=True,
                      config=OmegaConf.to_container(config,resolve=True),settings=wandb.Settings(start_method="thread"))
     
     wandb.run.name = f"{config.feature_extractor}_{wandb.run.name}"
     wandb.run.save()
     # prepare algorithm
-    agent = d3rlpy.algos.TD3PlusBC(use_gpu=torch.cuda.is_available(),
+    agent = d3rlpy.algos.IQL(use_gpu=torch.cuda.is_available(),
+                                   actor_learning_rate=config.learning_rate,
+                                   critic_learning_rate=config.learning_rate,
                                    actor_encoder_factory=encoder_factory,
                                    critic_encoder_factory=encoder_factory,
                                    batch_size=config.dataset.batch_size,
@@ -221,15 +227,15 @@ def main(config):
     tb_logger = tb_logging.get_logger()
     tb_logger.addFilter(_IgnoreTensorboardPathNotFound())
 
-    logger = configure("runs/", ["stdout", "tensorboard"])
 
     agent.fit(
         dataset,
-        eval_episodes=2,
-        n_epochs=500,
+        eval_episodes=True,
+        n_steps=200000,
+        n_steps_per_epoch=500,
         with_timestamp=False,
         scorers={
-        'eval_environment': no_grad_eval(eval_env,n_trials=10)},
+        'eval_environment': no_grad_eval(eval_env,n_trials=15)},
         tensorboard_dir='runs',
         save_interval=500)
 
