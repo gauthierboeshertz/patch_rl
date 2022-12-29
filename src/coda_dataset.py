@@ -2,6 +2,10 @@ import numpy as np
 import torch
 from .mask_utils import do_coda_on_transitions,get_cc_dicts_from_mask
 import time
+import einops 
+
+from IPython import embed
+
 
 class CodaDataset(torch.utils.data.Dataset):
     def __init__(self, dataset, mask_function, reward_function, max_coda_transitions=-1,
@@ -13,21 +17,68 @@ class CodaDataset(torch.utils.data.Dataset):
         self.patch_size = patch_size
         self.num_actions = num_actions
         self.num_patches = num_patches
-        self._create_all_ccs(dataset)
+        
         print("Dataset obs max", dataset.observations.float().max())
         print("Dataset obs min", dataset.observations.float().min())
         print("Dataset obs mean", dataset.observations.float().float().mean())
         print("Dataset obs std", dataset.observations.float().float().std())
 
+        self._create_all_ccs(dataset)
         s_time = time.time()
         coda_observations, coda_actions, coda_next_observations, coda_rewards, coda_dones = self._do_coda(dataset)
         print("Time to do coda", time.time()-s_time)
-        self.observations = torch.cat((dataset.observations, coda_observations), dim=0).type(torch.uint8)
-        self.actions = torch.cat((dataset.actions, coda_actions), dim=0)
-        self.next_observations = torch.cat((dataset.next_observations, coda_next_observations), dim=0).type(torch.uint8)
-        self.rewards = torch.cat((dataset.rewards, coda_rewards), dim=0)
-        self.dones = torch.cat((dataset.dones, coda_dones), dim=0)
+
+        if self.max_coda_transitions == 0:
+            #self.observations = dataset.observations.byte()
+            self.actions = dataset.actions
+            self.next_observations = dataset.next_observations.byte()
+            self.rewards = dataset.rewards
+            self.dones = dataset.dones
+            print(dataset.observations.dtype)
+            print(torch.unique(einops.rearrange(dataset.observations, 'b c h w -> (b h w) c'),dim=0))
+            self.observations = torch.cat((dataset.observations, torch.zeros_like(coda_observations,dtype=torch.uint8)), dim=0).byte()###.type(torch.uint8)
+            print(torch.unique(einops.rearrange(self.observations, 'b c h w -> (b h w) c'),dim=0))
+            print(dataset.observations - self.observations[:dataset.observations.shape[0]])
+            embed()
+            #self.actions = torch.cat((dataset.actions, torch.zeros_like(coda_actions)), dim=0)
+            #self.next_observations = torch.cat((dataset.next_observations, torch.zeros_like(coda_next_observations)), dim=0).type(torch.uint8)
+            #self.rewards = torch.cat((dataset.rewards, torch.zeros_like(coda_rewards)), dim=0)
+            #self.dones = torch.cat((dataset.dones, torch.zeros_like(coda_dones)), dim=0)
         
+        else:
+            obss = dataset.observations
+            rewss  = dataset.rewards
+            actss = dataset.actions
+            nobss = dataset.next_observations
+            print("Observations stats: ",obss.dtype,torch.min(obss),torch.max(obss),torch.mean(obss.float()),torch.std(obss.float()))
+            print("Rewards stats: ", rewss.dtype,torch.min(rewss),torch.max(rewss),torch.mean(rewss),torch.std(rewss))
+            print("Actions stats: ", actss.dtype ,torch.min(actss),torch.max(actss),torch.mean(actss),torch.std(actss))
+            print("Next observations stats: ",nobss.dtype,torch.min(nobss),torch.max(nobss),torch.mean(nobss.float()),torch.std(nobss.float()))
+            
+            
+            obss = coda_observations
+            rewss  = coda_rewards
+            actss = coda_actions
+            nobss = coda_next_observations
+            print("Observations stats: ",obss.dtype,torch.min(obss),torch.max(obss),torch.mean(obss.float()),torch.std(obss.float()))
+            print("Rewards stats: ", rewss.dtype,torch.min(rewss),torch.max(rewss),torch.mean(rewss),torch.std(rewss))
+            print("Actions stats: ", actss.dtype ,torch.min(actss),torch.max(actss),torch.mean(actss),torch.std(actss))
+            print("Next observations stats: ",nobss.dtype,torch.min(nobss),torch.max(nobss),torch.mean(nobss.float()),torch.std(nobss.float()))
+
+            self.observations = torch.cat((dataset.observations, coda_observations), dim=0).type(torch.uint8)
+            self.actions = torch.cat((dataset.actions, coda_actions), dim=0)
+            self.next_observations = torch.cat((dataset.next_observations, coda_next_observations), dim=0).type(torch.uint8)
+            self.rewards = torch.cat((dataset.rewards, coda_rewards), dim=0)
+            self.dones = torch.cat((dataset.dones, coda_dones), dim=0)
+            obss = self.observations
+            rewss  = self.rewards
+            actss = self.actions
+            nobss = self.next_observations
+            print("Observations stats: ",obss.dtype,torch.min(obss),torch.max(obss),torch.mean(obss.float()),torch.std(obss.float()))
+            print("Rewards stats: ", rewss.dtype,torch.min(rewss),torch.max(rewss),torch.mean(rewss),torch.std(rewss))
+            print("Actions stats: ", actss.dtype ,torch.min(actss),torch.max(actss),torch.mean(actss),torch.std(actss))
+            print("Next observations stats: ",nobss.dtype,torch.min(nobss),torch.max(nobss),torch.mean(nobss.float()),torch.std(nobss.float()))
+
         
     
     def _create_all_ccs(self,dataset):
@@ -35,9 +86,9 @@ class CodaDataset(torch.utils.data.Dataset):
         batch_size = 100
         for i in range(0,len(dataset),batch_size):
             max_idx = min(i+batch_size,len(dataset))
-            obs = dataset.observations[i:i+max_idx]
-            action = dataset.actions[i:i+max_idx]
-            next_obs = dataset.next_observations[i:i+max_idx]
+            obs = dataset.observations[i:max_idx]
+            action = dataset.actions[i:max_idx]
+            next_obs = dataset.next_observations[i:max_idx]
             mask = self.mask_function(obs, action, next_obs)
             masks.append(mask)
         masks = torch.cat(masks,dim=0)
@@ -56,9 +107,9 @@ class CodaDataset(torch.utils.data.Dataset):
         coda_rewards = []
 
         self.trans_idxs = []
-        if self.max_coda_transitions > 0:
+        if self.max_coda_transitions >= 0:
             len_dataset = len(dataset)
-            while len(coda_obs) < self.max_coda_transitions:
+            while len(coda_obs) < self.max_coda_transitions+1:
                 transition_idxs = np.random.choice(len_dataset, 1, replace=False)
                 transition_idxs = np.append(transition_idxs, np.random.choice(list(range(0,max(transition_idxs[0]-20,0))) + list(range(min(transition_idxs[0]+20,len_dataset),len_dataset)), 1))
                 transition1 = get_transition(transition_idxs[0])
@@ -70,7 +121,7 @@ class CodaDataset(torch.utils.data.Dataset):
                     coda_next_obs.extend(coda_transition[2])
                     self.trans_idxs.append(transition_idxs)
         else:
-            for transition_idx1 in range(len(self.dataset)):
+            for transition_idx1 in range(len(dataset)):
                 for transition_idx2 in range(transition_idx1+1, len(self.dataset)):
                     transition1 = get_transition(transition_idx1)
                     transition2 = get_transition(transition_idx2)
@@ -93,14 +144,9 @@ class CodaDataset(torch.utils.data.Dataset):
         coda_actions = coda_actions.cpu()
         coda_rewards = coda_rewards.cpu()
         coda_dones = torch.zeros((coda_observations.shape[0])).cpu()
-        print("Coda observations shape: ", coda_observations.shape)
-        print("Coda obs max", coda_observations.max())
-        print("Coda obs min", coda_observations.min())
-        print("Coda obs mean", coda_observations.mean())
-        print("Coda obs std", coda_observations.std())
 
         return coda_observations, coda_actions, coda_next_observations, coda_rewards, coda_dones
 
     def save(self, path):
-        np.savez(path, observations=self.observations, actions=self.actions, next_observations=self.next_observations, rewards=self.rewards, dones=self.dones)
+        np.savez(path, states=self.observations, actions=self.actions, next_states=self.next_observations, rewards=self.rewards, dones=self.dones)
 

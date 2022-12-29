@@ -47,11 +47,11 @@ def n_transition_list(dataset,n_transitions):
     
     transition_list = []
     
-    n_obs = dataset.observations[:n_transitions].numpy()
-    n_actions = dataset.actions[:n_transitions].numpy()
-    n_next_obs = dataset.next_observations[:n_transitions].numpy()
-    n_rewards = dataset.rewards[:n_transitions].numpy()
-    n_dones = dataset.dones[:n_transitions].numpy()
+    n_obs = dataset.observations[:n_transitions].detach().numpy()
+    n_actions = dataset.actions[:n_transitions].detach().numpy()
+    n_next_obs = dataset.next_observations[:n_transitions].detach().numpy()
+    n_rewards = dataset.rewards[:n_transitions].detach().numpy()
+    n_dones = dataset.dones[:n_transitions].detach().numpy()
 
     if np.isnan(n_obs).any():
         print("Nan in obs")
@@ -157,6 +157,7 @@ def setup_dataset(config,env):
                                    num_actions=env.action_space._shape[0],num_patches=config.dataset.num_patches)
         if config.dataset.save_coda_dataset:
             coda_dataset.save(coda_data_path)
+            print("Saved CoDA dataset to {}".format(coda_data_path))
             
     transition_list = n_transition_list(coda_dataset,n_transitions=config.dataset.num_transitions)
     #transitiondataset_to_mdpdataset(coda_dataset)

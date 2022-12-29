@@ -24,9 +24,9 @@ dataset:
   patch_size: [16,16]
   use_gt_mask: True
   use_gt_reward: True
-  max_coda_transitions: 1
+  max_coda_transitions: 0
   group_actions: True 
-  save_coda_dataset: True
+  save_coda_dataset: False
   num_transitions: 5000
 
 hydra:
