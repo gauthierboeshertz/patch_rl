@@ -9,12 +9,12 @@ dynamics_model_path : "/cluster/home/gboeshertz/patch_rl/outputs/dynamics/patch_
 
 learn_timesteps: 300000
 encoder_decoder_path: "/cluster/scratch/gboeshertz/patch_rl/outputs/patch_model/patch_vae/2022.11.20/184202/best_val_encoder_decoder.pt"
-feature_extractor: "patch_vae"
+feature_extractor: "nature_cnn"
 learning_rate: 0.0001
 
 load_dataset: True
 coda_dataset_path: /data/expert_visual_5000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz  #"data/coda_attempt.npz"
-dataset_path: "data/expert_visual_112transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz"
+dataset_path: /data/expert_visual_5000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz
 
 dataset:
   mask_function: None
@@ -24,10 +24,10 @@ dataset:
   patch_size: [16,16]
   use_gt_mask: True
   use_gt_reward: True
-  max_coda_transitions: 100
+  max_coda_transitions: 1
   group_actions: True 
-  save_coda_dataset: True
-  num_transitions: -1
+  save_coda_dataset: False
+  num_transitions: 5000
 
 hydra:
     run:

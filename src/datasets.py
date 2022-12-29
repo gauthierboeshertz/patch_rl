@@ -21,12 +21,13 @@ class ImageTransitionDataset(Dataset):
         data = np.load(data_path)
         self.observations = torch.from_numpy(data["states"])
         #self.observations = torch.cat((self.observations[:,0],self.observations[:,1],self.observations[:,2]),dim=-1).permute(0,3,1,2)
-        self.observations = rearrange(self.observations,'n b h w c  -> n (b c) h w')
+        self.observations = rearrange(self.observations,'n b h w c  -> n (b c) h w').type(torch.uint8)
+        print("Observations shape",self.observations.shape)
         self.next_observations = torch.from_numpy(data["next_states"])
-        self.next_observations = rearrange(self.next_observations,'n b h w c  -> n (b c) h w')
-        self.actions = torch.from_numpy(data["actions"])
-        self.rewards = torch.from_numpy(data["rewards"])
-        self.dones = torch.from_numpy(data["dones"])
+        self.next_observations = rearrange(self.next_observations,'n b h w c  -> n (b c) h w').type(torch.uint8)
+        self.actions = torch.from_numpy(data["actions"]).float()
+        self.rewards = torch.from_numpy(data["rewards"]).float()
+        self.dones = torch.from_numpy(data["dones"]).float()
 
     def __len__(self):
         return self.observations.shape[0]

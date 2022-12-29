@@ -37,8 +37,7 @@ class ImageReshaper(gym.ObservationWrapper):
     def __init__(self, env):
         super(ImageReshaper, self).__init__(env)
         self.observation_space = gym.spaces.Box(
-            low=0, high=255, shape=(3, 128, 128), dtype=np.uint8
-        )
+            low=0, high=255, shape=(3, 128, 128), dtype=np.uint8)
 
     def observation(self, observation):
         return observation.transpose(2, 0, 1)
@@ -66,6 +65,7 @@ def n_transition_list(dataset,n_transitions):
         print("Nan in n_dones")
 
     print(f"n_obs shape: {n_obs.shape}")
+    print("Observations stats: ",np.min(n_obs),np.max(n_obs),np.mean(n_obs),np.std(n_obs))
     print("Rewards stats: ",np.min(n_rewards),np.max(n_rewards),np.mean(n_rewards),np.std(n_rewards))
     print("Actions stats: ",np.min(n_actions),np.max(n_actions),np.mean(n_actions),np.std(n_actions))
 
@@ -73,11 +73,11 @@ def n_transition_list(dataset,n_transitions):
     for i in range(0,n_obs.shape[0]):
         trans = d3rlpy.dataset.Transition(observation_shape=list(n_obs[i].shape),
                                           action_size=n_actions[i].shape[0],
-                                          observation=n_obs[i],
-                                          action=n_actions[i],
-                                          reward=n_rewards[i],
-                                          next_observation=n_next_obs[i],
-                                          terminal=terminals[i])
+                                          observation=n_obs[i].astype(np.uint8),
+                                          action=n_actions[i].astype(np.float32),
+                                          reward= float(n_rewards[i]),
+                                          next_observation=n_next_obs[i].astype(np.uint8),
+                                          terminal= float(terminals[i]))
         transition_list.append(trans)
     
     print(f"Transition list length: {len(transition_list)}")
@@ -136,11 +136,11 @@ def setup_dataset(config,env):
 
 
     coda_data_path = f"{get_original_cwd()}/{config.coda_dataset_path}"
+    
     if config.load_dataset:
         print(f"Loading dataset from {coda_data_path}")
         coda_dataset = ImageTransitionDataset(coda_data_path)
     else:
-        
         if not config.dataset.use_gt_mask:
             encoder_decoder, dynamics_model = setup_models_for_mask(config,num_actions= env.action_space._shape[0])
         else:
@@ -196,7 +196,6 @@ def main(config):
     eval_env = environment.Environment(**eval_env_config)
     eval_env = ImageReshaper(gym_wrapper.GymWrapper(eval_env))
 
-    
     dataset = setup_dataset(config,eval_env)
     
     print("Replay buffer kwargs")
@@ -210,7 +209,7 @@ def main(config):
         raise AssertionError("Unknown feature extractor")
     
 
-    run = wandb.init(project=f"batch_spriteworld_dropout", entity="gboeshertz", sync_tensorboard=True,
+    run = wandb.init(project=f"batch_spriteworld", entity="gboeshertz", sync_tensorboard=True,
                      config=OmegaConf.to_container(config,resolve=True),settings=wandb.Settings(start_method="thread"))
     
     wandb.run.name = f"{config.feature_extractor}_{wandb.run.name}"
@@ -231,7 +230,7 @@ def main(config):
     agent.fit(
         dataset,
         eval_episodes=True,
-        n_steps=200000,
+        n_steps=100000,
         n_steps_per_epoch=500,
         with_timestamp=False,
         scorers={
@@ -240,7 +239,7 @@ def main(config):
         save_interval=500)
 
     run.finish()
-#wandb.finish()
+    wandb.finish()
 
 if __name__ == '__main__':
     main()

@@ -3,7 +3,7 @@ defaults:
 
 trained_agent_path: /cluster/scratch/gboeshertz/patch_rl/outputs/train_agent/4/2022.12.11/142305/eval_runs/best_model.zip
 num_action_repeat: 4
-num_transitions: 1000
+num_transitions: 25000
 
 hydra:
     run:

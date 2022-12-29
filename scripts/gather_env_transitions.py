@@ -28,7 +28,7 @@ def gather_env_transitions(env,num_transitions,trained_agent=None,num_action_rep
                 action_rep += 1
         else:
             action = trained_agent.predict(state)[0][0]
-            action = np.clip(action + np.random.normal(0,0.01,size=action.shape).astype(np.float32), env.action_space.low+0.00001, env.action_space.high-0.00001)
+            action = np.clip(action + np.random.normal(0,0.2,size=action.shape).astype(np.float32), env.action_space.low+0.00001, env.action_space.high-0.00001)
             
         next_state, reward, done, _ = env.step(action)
         states.append(state)
@@ -39,7 +39,6 @@ def gather_env_transitions(env,num_transitions,trained_agent=None,num_action_rep
         dones.append(done)
         state = next_state
         if done:
-            
             print("Episode reward",ep_reward)
             ep_reward = 0
             state = env.reset()
@@ -51,9 +50,7 @@ def gather_env_transitions(env,num_transitions,trained_agent=None,num_action_rep
     rewards = np.array(rewards)
     dones = np.array(dones)
         
-          
     print("States shape",states.shape)
-    
     np.savez_compressed(data_name,states=states,actions=actions,rewards=rewards,next_states=next_states,dones=dones)
 
 @hydra.main(config_path="configs", config_name="gather_transitions")

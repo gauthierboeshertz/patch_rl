@@ -236,7 +236,21 @@ def gt_reward_function(image, next_image, num_sprites=4,touch_reward=0.25,no_tou
         total_rewards += touch_reward*(~sprite_in_next_image & (sprite_in_image)).float()
     
     total_rewards[total_rewards == 0] = no_touch_reward
+    
     return total_rewards
+
+def gt_count_function(image, num_sprites=4):
+    
+    sprite_colors = torch.Tensor(bouncing_sprites.color_list).to(image.device)
+    sprites_count = torch.zeros((image.shape[0])).to(image.device)
+    perm_image = image.permute(0,2,3,1)
+    for sprite_idx in range(num_sprites):
+        sprite_color = sprite_colors[sprite_idx]
+        sprite_in_image = ((perm_image == sprite_color).all(dim=-1)).sum( (1,2)) > 0
+
+        sprites_count += sprite_in_image.float()
+    
+    return sprites_count
 
 
 def remove_targets_from_image(image):

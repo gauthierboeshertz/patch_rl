@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from .mask_utils import do_coda_on_transitions,get_cc_dicts_from_mask
+import time
 
 class CodaDataset(torch.utils.data.Dataset):
     def __init__(self, dataset, mask_function, reward_function, max_coda_transitions=-1,
@@ -13,8 +14,14 @@ class CodaDataset(torch.utils.data.Dataset):
         self.num_actions = num_actions
         self.num_patches = num_patches
         self._create_all_ccs(dataset)
+        print("Dataset obs max", dataset.observations.float().max())
+        print("Dataset obs min", dataset.observations.float().min())
+        print("Dataset obs mean", dataset.observations.float().float().mean())
+        print("Dataset obs std", dataset.observations.float().float().std())
+
+        s_time = time.time()
         coda_observations, coda_actions, coda_next_observations, coda_rewards, coda_dones = self._do_coda(dataset)
-        
+        print("Time to do coda", time.time()-s_time)
         self.observations = torch.cat((dataset.observations, coda_observations), dim=0).type(torch.uint8)
         self.actions = torch.cat((dataset.actions, coda_actions), dim=0)
         self.next_observations = torch.cat((dataset.next_observations, coda_next_observations), dim=0).type(torch.uint8)
@@ -52,7 +59,8 @@ class CodaDataset(torch.utils.data.Dataset):
         if self.max_coda_transitions > 0:
             len_dataset = len(dataset)
             while len(coda_obs) < self.max_coda_transitions:
-                transition_idxs = np.random.choice(len_dataset, 2, replace=False)
+                transition_idxs = np.random.choice(len_dataset, 1, replace=False)
+                transition_idxs = np.append(transition_idxs, np.random.choice(list(range(0,max(transition_idxs[0]-20,0))) + list(range(min(transition_idxs[0]+20,len_dataset),len_dataset)), 1))
                 transition1 = get_transition(transition_idxs[0])
                 transition2 = get_transition(transition_idxs[1])
                 coda_transition = do_coda_on_transitions(transition1, transition2, patch_size=self.patch_size, num_actions=self.num_actions)
@@ -62,16 +70,15 @@ class CodaDataset(torch.utils.data.Dataset):
                     coda_next_obs.extend(coda_transition[2])
                     self.trans_idxs.append(transition_idxs)
         else:
-            if self.max_coda_transitions == -1:
-                for transition_idx1 in range(len(self.dataset)):
-                    for transition_idx2 in range(transition_idx1+1, len(self.dataset)):
-                        transition1 = get_transition(transition_idx1)
-                        transition2 = get_transition(transition_idx2)
-                        coda_transition = do_coda_on_transitions(transition1, transition2, patch_size=self.patch_size[0], num_actions=self.num_actions)
-                        if coda_transition is not None:
-                            coda_obs.extend(coda_transition[0])
-                            coda_actions.extend(coda_transition[1])
-                            coda_next_obs.extend(coda_transition[2])
+            for transition_idx1 in range(len(self.dataset)):
+                for transition_idx2 in range(transition_idx1+1, len(self.dataset)):
+                    transition1 = get_transition(transition_idx1)
+                    transition2 = get_transition(transition_idx2)
+                    coda_transition = do_coda_on_transitions(transition1, transition2, patch_size=self.patch_size[0], num_actions=self.num_actions)
+                    if coda_transition is not None:
+                        coda_obs.extend(coda_transition[0])
+                        coda_actions.extend(coda_transition[1])
+                        coda_next_obs.extend(coda_transition[2])
         
         coda_obs = torch.stack(coda_obs, dim=0)
         coda_next_obs = torch.stack(coda_next_obs, dim=0)
@@ -87,6 +94,11 @@ class CodaDataset(torch.utils.data.Dataset):
         coda_rewards = coda_rewards.cpu()
         coda_dones = torch.zeros((coda_observations.shape[0])).cpu()
         print("Coda observations shape: ", coda_observations.shape)
+        print("Coda obs max", coda_observations.max())
+        print("Coda obs min", coda_observations.min())
+        print("Coda obs mean", coda_observations.mean())
+        print("Coda obs std", coda_observations.std())
+
         return coda_observations, coda_actions, coda_next_observations, coda_rewards, coda_dones
 
     def save(self, path):

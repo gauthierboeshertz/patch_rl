@@ -90,7 +90,7 @@ def train(model, encoder_decoder,optimizer, train_dataloader, val_dataloader, nu
     info_bar.finish()
     return model
 
-def encodings_dataset(encoder_decoder, dataloader, save_obs=False,device="cpu"):
+def create_encodings_dataset(encoder_decoder, dataloader, save_obs=False,device="cpu"):
     
     all_obs = []
     obs_encodings = []
@@ -169,8 +169,8 @@ def main(config):
     
     print("Creating the encodings dataset")
     with torch.no_grad():
-        train_encodings_dataset = encodings_dataset(encoder_decoder, train_dataloader,save_obs=config["recons_loss"],device= config["device"])
-        val_encodings_dataset = encodings_dataset(encoder_decoder, val_dataloader,save_obs=config["recons_loss"],device=config["device"])
+        train_encodings_dataset = create_encodings_dataset(encoder_decoder, train_dataloader,save_obs=config["recons_loss"],device= config["device"])
+        val_encodings_dataset = create_encodings_dataset(encoder_decoder, val_dataloader,save_obs=config["recons_loss"],device=config["device"])
     
     del train_dataset
     del val_dataset

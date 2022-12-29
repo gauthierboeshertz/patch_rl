@@ -39,7 +39,6 @@ class PatchCNNEncoder(nn.Module):
         return img_patches_encodings.flatten(start_dim=1)
         
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        
         return self.linear(self.cnns(observations))
 
     def get_feature_size(self) -> int:
