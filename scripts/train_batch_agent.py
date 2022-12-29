@@ -157,6 +157,7 @@ def setup_dataset(config,env):
                                    num_actions=env.action_space._shape[0],num_patches=config.dataset.num_patches)
         if config.dataset.save_coda_dataset:
             coda_dataset.save(coda_data_path)
+            print("Saved CoDA dataset to {}".format(coda_data_path))
             
     transition_list = n_transition_list(coda_dataset,n_transitions=config.dataset.num_transitions)
     #transitiondataset_to_mdpdataset(coda_dataset)

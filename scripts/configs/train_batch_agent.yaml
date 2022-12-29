@@ -13,7 +13,7 @@ feature_extractor: "nature_cnn"
 learning_rate: 0.0001
 
 load_dataset: True
-coda_dataset_path: /data/expert_visual_5000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz  #"data/coda_attempt.npz"
+coda_dataset_path: /data/coda_expert_visual_5000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz  #"data/coda_attempt.npz"
 dataset_path: /data/expert_visual_5000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz
 
 dataset:

@@ -35,9 +35,9 @@ class CodaDataset(torch.utils.data.Dataset):
         batch_size = 100
         for i in range(0,len(dataset),batch_size):
             max_idx = min(i+batch_size,len(dataset))
-            obs = dataset.observations[i:i+max_idx]
-            action = dataset.actions[i:i+max_idx]
-            next_obs = dataset.next_observations[i:i+max_idx]
+            obs = dataset.observations[i:max_idx]
+            action = dataset.actions[i:max_idx]
+            next_obs = dataset.next_observations[i:max_idx]
             mask = self.mask_function(obs, action, next_obs)
             masks.append(mask)
         masks = torch.cat(masks,dim=0)
