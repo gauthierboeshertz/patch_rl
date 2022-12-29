@@ -12,7 +12,7 @@ encoder_decoder_path: "/cluster/scratch/gboeshertz/patch_rl/outputs/patch_model/
 feature_extractor: "nature_cnn"
 learning_rate: 0.0001
 
-load_dataset: True
+load_dataset: False
 coda_dataset_path: /data/expert_visual_5000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz  #"data/coda_attempt.npz"
 dataset_path: /data/expert_visual_5000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz
 
@@ -26,7 +26,7 @@ dataset:
   use_gt_reward: True
   max_coda_transitions: 1
   group_actions: True 
-  save_coda_dataset: False
+  save_coda_dataset: True
   num_transitions: 5000
 
 hydra:
