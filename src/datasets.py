@@ -21,11 +21,11 @@ class ImageTransitionDataset(Dataset):
         data = np.load(data_path)
         self.observations = torch.from_numpy(data["states"]).type(torch.uint8)
         #self.observations = torch.cat((self.observations[:,0],self.observations[:,1],self.observations[:,2]),dim=-1).permute(0,3,1,2)
-        if not self.observations.shape == (5008, 3, 128, 128):
+        if not self.observations.shape == (5012, 3, 128, 128):
             self.observations = rearrange(self.observations,'n b h w c  -> n (b c) h w').type(torch.uint8)
         print("Observations shape",self.observations.shape)
         self.next_observations = torch.from_numpy(data["next_states"]).type(torch.uint8)
-        if not self.observations.shape == (5008, 3, 128, 128):
+        if not self.observations.shape == (5012, 3, 128, 128):
             self.next_observations = rearrange(self.next_observations,'n b h w c  -> n (b c) h w').type(torch.uint8)
         self.actions = torch.from_numpy(data["actions"]).float()
         self.rewards = torch.from_numpy(data["rewards"]).float()

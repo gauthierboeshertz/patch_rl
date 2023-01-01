@@ -46,7 +46,9 @@ class ImageReshaper(gym.ObservationWrapper):
 def n_transition_list(dataset,n_transitions):
     
     transition_list = []
-    
+    if n_transitions == -1:
+        n_transitions = dataset.actions.shape[0]
+        
     n_obs = dataset.observations[:n_transitions].detach().numpy()
     n_actions = dataset.actions[:n_transitions].detach().numpy()
     n_next_obs = dataset.next_observations[:n_transitions].detach().numpy()
@@ -134,30 +136,24 @@ def make_reward_function(image, action, next_image, encoder=None,dynamics=None,m
 
 def setup_dataset(config,env):
 
-
-    coda_data_path = f"{get_original_cwd()}/{config.coda_dataset_path}"
-    
-    if config.load_dataset:
-        print(f"Loading dataset from {coda_data_path}")
-        coda_dataset = ImageTransitionDataset(coda_data_path)
+    if not config.dataset.use_gt_mask:
+        encoder_decoder, dynamics_model = setup_models_for_mask(config,num_actions= env.action_space._shape[0])
     else:
-        if not config.dataset.use_gt_mask:
-            encoder_decoder, dynamics_model = setup_models_for_mask(config,num_actions= env.action_space._shape[0])
-        else:
-            encoder_decoder = dynamics_model = None
+        encoder_decoder = dynamics_model = None
 
-        mask_function = lambda image, next_image, action: make_mask_function(image, next_image,action, encoder=encoder_decoder,dynamics=dynamics_model, make_gt_mask=config.dataset.use_gt_mask,patch_size=config.dataset.patch_size, num_sprites=config.env.num_sprites)
-        reward_function = lambda image, action, next_image: make_reward_function(image, action,next_image, encoder=encoder_decoder,dynamics=dynamics_model,make_gt_reward=config.dataset.use_gt_reward)
+    mask_function = lambda image, next_image, action: make_mask_function(image, next_image,action, encoder=encoder_decoder,dynamics=dynamics_model, make_gt_mask=config.dataset.use_gt_mask,patch_size=config.dataset.patch_size, num_sprites=config.env.num_sprites)
+    reward_function = lambda image, action, next_image: make_reward_function(image, action,next_image, encoder=encoder_decoder,dynamics=dynamics_model,make_gt_reward=config.dataset.use_gt_reward)
 
-        data_path = f"{get_original_cwd()}/{config.dataset_path}"
-        dataset = ImageTransitionDataset(data_path)
-        print("Creating CoDA data")
-        coda_dataset = CodaDataset(dataset,max_coda_transitions=config.dataset.max_coda_transitions ,mask_function=mask_function,
-                                   reward_function=reward_function, patch_size=config.dataset.patch_size,
-                                   num_actions=env.action_space._shape[0],num_patches=config.dataset.num_patches)
-        if config.dataset.save_coda_dataset:
-            coda_dataset.save(coda_data_path)
-            print("Saved CoDA dataset to {}".format(coda_data_path))
+    data_path = f"{get_original_cwd()}/{config.dataset_path}"
+    dataset = ImageTransitionDataset(data_path)
+    print("Creating CoDA data")
+    coda_dataset = CodaDataset(dataset,max_coda_transitions=config.dataset.max_coda_transitions ,mask_function=mask_function,
+                                reward_function=reward_function, patch_size=config.dataset.patch_size,
+                                num_actions=env.action_space._shape[0],num_patches=config.dataset.num_patches)
+    if config.dataset.save_coda_dataset:
+        coda_data_path = f"{get_original_cwd()}/{config.coda_save_dataset_path}"
+        coda_dataset.save(coda_data_path)
+        print("Saved CoDA dataset to {}".format(coda_data_path))
             
     transition_list = n_transition_list(coda_dataset,n_transitions=config.dataset.num_transitions)
     #transitiondataset_to_mdpdataset(coda_dataset)

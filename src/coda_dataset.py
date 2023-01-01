@@ -28,24 +28,16 @@ class CodaDataset(torch.utils.data.Dataset):
         coda_observations, coda_actions, coda_next_observations, coda_rewards, coda_dones = self._do_coda(dataset)
         print("Time to do coda", time.time()-s_time)
 
+
         if self.max_coda_transitions == 0:
-            #self.observations = dataset.observations.byte()
             self.actions = dataset.actions
             self.next_observations = dataset.next_observations.byte()
             self.rewards = dataset.rewards
             self.dones = dataset.dones
-            print(dataset.observations.dtype)
-            print(torch.unique(einops.rearrange(dataset.observations, 'b c h w -> (b h w) c'),dim=0))
-            self.observations = torch.cat((dataset.observations, torch.zeros_like(coda_observations,dtype=torch.uint8)), dim=0).byte()###.type(torch.uint8)
-            print(torch.unique(einops.rearrange(self.observations, 'b c h w -> (b h w) c'),dim=0))
-            print(dataset.observations - self.observations[:dataset.observations.shape[0]])
-            embed()
-            #self.actions = torch.cat((dataset.actions, torch.zeros_like(coda_actions)), dim=0)
-            #self.next_observations = torch.cat((dataset.next_observations, torch.zeros_like(coda_next_observations)), dim=0).type(torch.uint8)
-            #self.rewards = torch.cat((dataset.rewards, torch.zeros_like(coda_rewards)), dim=0)
-            #self.dones = torch.cat((dataset.dones, torch.zeros_like(coda_dones)), dim=0)
-        
+            self.observations = torch.cat((dataset.observations, torch.zeros_like(coda_observations)), dim=0).byte()[:self.dones.shape[0]]# Without this line, the training doesnt work
+            
         else:
+
             obss = dataset.observations
             rewss  = dataset.rewards
             actss = dataset.actions
