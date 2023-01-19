@@ -1,6 +1,6 @@
 # patch_rl
 
-##Installation:
+## Installation:
 
 install miniconda
 
