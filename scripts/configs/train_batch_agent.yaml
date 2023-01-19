@@ -4,16 +4,16 @@ defaults:
     - env: spriteworld
 
 seed: 0
-device: "cpu"                                               
-dynamics_model_path : "/cluster/home/gboeshertz/patch_rl/outputs/dynamics/patch_vae/2022.11.28/163030/best_val_dynamics.pt"
+device: "cpu"     
+encoder_decoder_path : "/cluster/home/gboeshertz/patch_rl/outputs/patch_model/patch_vae/2023.01.08/192705/best_val_encoder_decoder.pt"
+dynamics_model_path : "/cluster/home/gboeshertz/patch_rl/outputs/dynamics/patch_vae/2023.01.18/190530/best_val_dynamics.pt"
 
 learn_timesteps: 300000
-encoder_decoder_path: "/cluster/scratch/gboeshertz/patch_rl/outputs/patch_model/patch_vae/2022.11.20/184202/best_val_encoder_decoder.pt"
 feature_extractor: "nature_cnn"
 learning_rate: 0.0001
 
-coda_save_dataset_path: /data/coda_expert_visual_5000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz  #"data/coda_attempt.npz"
-dataset_path: /data/expert_visual_5000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz
+coda_save_dataset_path: /data/coda_test.npz  #"data/coda_attempt.npz"
+dataset_path: /data/expert_visual_100transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz
 
 dataset:
   mask_function: None
@@ -21,12 +21,13 @@ dataset:
   num_patches: 64
   batch_size: 256
   patch_size: [16,16]
-  use_gt_mask: True
+  use_gt_mask: False
   use_gt_reward: True
-  max_coda_transitions: 0
+  max_coda_transitions: 5000
   group_actions: True 
-  save_coda_dataset: False
+  save_coda_dataset: True
   num_transitions: -1
+  prioritize_object_count: False
 
 hydra:
     run:

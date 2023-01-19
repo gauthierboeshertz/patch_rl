@@ -1,12 +1,13 @@
 defaults:
     - encoder_decoder: vae
     - dynamics: attention_dynamics
+    - env: spriteworld
 
-device: "cpu"
 num_workers: 1
 encoder_decoder_path : -1
 
-dynamics_model_path : "/cluster/home/gboeshertz/patch_rl/outputs/dynamics/patch_vae/2022.11.26/152300/best_val_dynamics.pt"
+dynamics_model_path : "/cluster/home/gboeshertz/patch_rl/outputs/dynamics/patch_vae/2023.01.18/190530/best_val_dynamics.pt"
+test_data_path:  "/cluster/home/gboeshertz/patch_rl/data/expert_visual_5000transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz"
 
 loss_weights:
     dyn_loss_weight: 0
@@ -14,15 +15,8 @@ loss_weights:
     inverse_loss_weight: 0
 
 env:
-    num_transitions: 10000
-    num_sprites: 4
-    all_sprite_mover: True
-    one_sprite_mover: False
-    discrete_all_sprite_mover: False
-    random_init_places: False
-    num_action_repeat: 2
-    instant_move: True
-    dont_show_targets: True
+  num_transitions: 10000
+  num_action_repeat: 4
 
 
 hydra:

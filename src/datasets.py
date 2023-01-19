@@ -109,11 +109,11 @@ class SequenceImageTransitionDataset(Dataset):
         
         self.valid_transitions_indices = self._get_valid_indices()
         
-        if  self.is_test:
-            self.observations, self.actions, self.next_observations, self.rewards, self.infos = self._make_all_sequence() 
-        else:
-            self.observations, self.actions, self.next_observations, self.rewards = self._make_all_sequence() 
-        assert self.observations.shape[0] == self.actions.shape[0] == self.next_observations.shape[0] == self.rewards.shape[0] == len(self.valid_transitions_indices)
+        #if  self.is_test:
+        #    self.observations, self.actions, self.next_observations, self.rewards, self.infos = self._make_all_sequence() 
+        #else:
+        #    self.observations, self.actions, self.next_observations, self.rewards = self._make_all_sequence() 
+        #assert self.observations.shape[0] == self.actions.shape[0] == self.next_observations.shape[0] == self.rewards.shape[0] == len(self.valid_transitions_indices)
         if onehot_action:
             self.actions = nn.functional.one_hot(self.actions.long(),num_classes=4).float().permute(0,1,3,2)
         self._classify_rewards()
@@ -130,7 +130,6 @@ class SequenceImageTransitionDataset(Dataset):
             print(f"reward {reward} has {torch.sum(self.rewards == reward)} transitions")
             self.rewards[self.rewards == reward] = reward_idx
         
-            
     def _get_valid_indices(self):
         """
         make_episodes  make episode by adding indices to episode list using dones,
@@ -200,9 +199,21 @@ class SequenceImageTransitionDataset(Dataset):
 
         
     def __getitem__(self, idx):
+
+        t_idx = self.valid_transitions_indices[idx]
+        obs = []
+        actions = []
+        next_obs = []
+        rewards = []
+        for i in range(self.sequence_length):
+            obs.append(self.observations[t_idx+i])
+            actions.append(self.actions[t_idx+i])
+            next_obs.append(self.next_observations[t_idx+i])
+            rewards.append(self.rewards[t_idx+i])
         
-        if self.is_test:
-            return self.observations[idx], self.actions[idx], self.next_observations[idx], self.rewards[idx], self.infos[idx]
-        else:
-            return self.observations[idx], self.actions[idx], self.next_observations[idx], self.rewards[idx]
+        obs = torch.stack(obs).float()
+        actions = torch.stack(actions).float()
+        next_obs = torch.stack(next_obs).float()
+        rewards = torch.stack(rewards).float()
+        return obs, actions, next_obs, rewards
 

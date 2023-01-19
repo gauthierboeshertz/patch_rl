@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from .mask_utils import do_coda_on_transitions,get_cc_dicts_from_mask
+from .mask_utils import do_coda_on_transitions,get_cc_dicts_from_mask, gt_count_function
 import time
 import einops 
 
@@ -9,7 +9,7 @@ from IPython import embed
 
 class CodaDataset(torch.utils.data.Dataset):
     def __init__(self, dataset, mask_function, reward_function, max_coda_transitions=-1,
-                 patch_size=(16,16), num_actions=4,num_patches=64):
+                 patch_size=(16,16), num_actions=4,num_patches=64,prioritize_object_count=False):
         
         self.mask_function = mask_function
         self.reward_function = reward_function
@@ -17,6 +17,7 @@ class CodaDataset(torch.utils.data.Dataset):
         self.patch_size = patch_size
         self.num_actions = num_actions
         self.num_patches = num_patches
+        self.prioritize_object_count = prioritize_object_count
         
         print("Dataset obs max", dataset.observations.float().max())
         print("Dataset obs min", dataset.observations.float().min())
@@ -47,7 +48,6 @@ class CodaDataset(torch.utils.data.Dataset):
             print("Actions stats: ", actss.dtype ,torch.min(actss),torch.max(actss),torch.mean(actss),torch.std(actss))
             print("Next observations stats: ",nobss.dtype,torch.min(nobss),torch.max(nobss),torch.mean(nobss.float()),torch.std(nobss.float()))
             
-            
             obss = coda_observations
             rewss  = coda_rewards
             actss = coda_actions
@@ -72,10 +72,24 @@ class CodaDataset(torch.utils.data.Dataset):
             print("Next observations stats: ",nobss.dtype,torch.min(nobss),torch.max(nobss),torch.mean(nobss.float()),torch.std(nobss.float()))
 
         
-    
+    def _create_all_counts(self,dataset):
+        counts = []
+        batch_size = 100
+        for i in range(0,len(dataset),batch_size):
+            max_idx = min(i+batch_size,len(dataset))
+            obs = dataset.observations[i:max_idx]
+            count = gt_count_function(obs)
+            counts.append(count)
+        counts = torch.cat(counts,dim=0)
+        
+        print(f"Count shape: {counts.shape}")
+        return counts
+
+        
+        
     def _create_all_ccs(self,dataset):
         masks = []
-        batch_size = 100
+        batch_size = 50
         for i in range(0,len(dataset),batch_size):
             max_idx = min(i+batch_size,len(dataset))
             obs = dataset.observations[i:max_idx]
@@ -88,7 +102,6 @@ class CodaDataset(torch.utils.data.Dataset):
         print(f"Masks shape: {masks.shape}")
         self.ccs = [get_cc_dicts_from_mask(mask,self.num_patches,self.num_actions) for mask in masks]
         
-        
     def _do_coda(self,dataset):
         def get_transition(idx):
             return *dataset[idx], self.ccs[idx]
@@ -99,10 +112,17 @@ class CodaDataset(torch.utils.data.Dataset):
         coda_rewards = []
 
         self.trans_idxs = []
+        
+        if self.prioritize_object_count:
+            counts = self._create_all_counts(dataset)
+            trans_prob = counts / torch.sum(counts)
+        else:
+            trans_prob = torch.ones(len(dataset)) / len(dataset)
+            
         if self.max_coda_transitions >= 0:
             len_dataset = len(dataset)
             while len(coda_obs) < self.max_coda_transitions+1:
-                transition_idxs = np.random.choice(len_dataset, 1, replace=False)
+                transition_idxs = np.random.choice(len_dataset, 1, replace=False,p=trans_prob.numpy())
                 transition_idxs = np.append(transition_idxs, np.random.choice(list(range(0,max(transition_idxs[0]-20,0))) + list(range(min(transition_idxs[0]+20,len_dataset),len_dataset)), 1))
                 transition1 = get_transition(transition_idxs[0])
                 transition2 = get_transition(transition_idxs[1])

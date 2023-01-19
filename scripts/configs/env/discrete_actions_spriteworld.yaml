@@ -1,9 +1,9 @@
 num_sprites: 4
-all_sprite_mover: True
+all_sprite_mover: False
 one_sprite_mover: False
-discrete_all_sprite_mover: False
+discrete_all_sprite_mover: True
 random_init_places: True
-instant_move: True
+instant_move: False
 dont_show_targets: True
 visual_obs: True
 episode_timesteps: 100

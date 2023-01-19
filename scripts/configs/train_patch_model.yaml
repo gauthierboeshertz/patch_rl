@@ -1,0 +1,28 @@
+defaults:
+    - encoder_decoder: small_patches_cvae
+    - inverse: cnn
+    - env: spriteworld
+
+device: "cpu"
+
+env:
+  num_transitions: 50000
+  num_action_repeat: 4
+
+
+loss_weights:
+    dyn_loss_weight: 0
+    vae_loss_weight: 1
+    inverse_loss_weight: 0
+
+
+train_loop:
+    batch_size: 32
+    num_epochs: 100
+    num_workers: 0
+    lr: 0.0001
+    scheduler_milestones: [50,75]
+
+hydra:
+    run:
+        dir: outputs/patch_model/${encoder_decoder.name}/${now:%Y.%m.%d}/${now:%H%M%S}/

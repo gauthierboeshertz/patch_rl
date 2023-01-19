@@ -1,30 +1,31 @@
 defaults:
     - dynamics: attention_dynamics
     - encoder_decoder: vae
+    - env: spriteworld
 
-device: "cpu"                                               
-encoder_decoder_path : "/cluster/home/gboeshertz/patch_rl/outputs/patch_model/patch_vae/2022.11.25/153213/best_val_encoder_decoder.pt"
+device: "cpu"                                           
+encoder_decoder_path : "/cluster/home/gboeshertz/patch_rl/outputs/patch_model/patch_vae/2023.01.08/192705/best_val_encoder_decoder.pt"
 recons_loss: False
 
-env:
-    num_transitions: 150
-    num_sprites: 4
-    all_sprite_mover: True
-    one_sprite_mover: False
-    discrete_all_sprite_mover: False
-    random_init_places: True
-    num_action_repeat: 4
-    instant_move: True
-    dont_show_targets: True
+finetune: True
+finetune_data_path: "/cluster/home/gboeshertz/patch_rl/data/expert_visual_500transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz"
+finetune_dynamics_model_path: "/cluster/home/gboeshertz/patch_rl/outputs/dynamics/patch_vae/2023.01.15/212645/best_val_dynamics.pt"
 
-    
+do_test: True
+test_data_path: "/cluster/home/gboeshertz/patch_rl/data/expert_visual_500transitions_4_all_sprite_mover_True_4instantmoveno_targets.npz"
+
+env:
+  num_transitions: 50000
+  num_action_repeat: 4
+
 train_loop:
-    batch_size: 3
+    batch_size: 256
     num_epochs: 300
     num_workers: 1
-    lr: 0.0005
-    scheduler_milestones: [200,250]
-
+    lr: 0.00025
+    scheduler_milestones: [170,250]
+    early_stopping_patience: 7
+    early_stopping_delta: 0.0001
 
 hydra:
     run:

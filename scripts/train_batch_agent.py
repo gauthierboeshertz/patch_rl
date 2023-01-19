@@ -23,7 +23,7 @@ from src.d3rl_feature_extractor import PatchCNNFactory, PatchVAEFactory
 from hydra.utils import get_original_cwd, to_absolute_path
 import numpy as np
 from d3rlpy.metrics.scorer import initial_state_value_estimation_scorer
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class _IgnoreTensorboardPathNotFound(logging.Filter):
     def filter(self, record):
@@ -31,6 +31,21 @@ class _IgnoreTensorboardPathNotFound(logging.Filter):
         if "No path found after" in record.msg:
             return False
         return True
+
+def get_first_int(string):
+    start = -1
+    end = -1
+    for i in range(len(string)):
+        if string[i].isdigit():
+            if start == -1:
+                start = i
+            end = i
+        elif start != -1:
+            break
+    if start == -1:
+        return None
+    else:
+        return int(string[start:end + 1])
 
 
 class ImageReshaper(gym.ObservationWrapper):
@@ -87,34 +102,36 @@ def n_transition_list(dataset,n_transitions):
         
     
 
-def setup_models_for_mask(config,num_actions=4):
+def setup_models_for_mask(config):
     
     trained_dynamics_conf = OmegaConf.load(os.path.join(os.path.dirname(config["dynamics_model_path"]), ".hydra/config.yaml"))
+    config["dynamics"] = trained_dynamics_conf["dynamics"]
+    config["dynamics"]["num_actions"] = 8
 
     config["encoder_decoder_path"] = trained_dynamics_conf["encoder_decoder_path"]
     print("Loading encoder decoder from {}".format(config["encoder_decoder_path"]))
     encoder_decoder_conf = OmegaConf.load(os.path.join(os.path.dirname(config["encoder_decoder_path"]), ".hydra/config.yaml"))["encoder_decoder"]
     config["encoder_decoder"] = encoder_decoder_conf
-
+    
     config["encoder_decoder"]["in_channels"] = (3 if (config["env"]["instant_move"] or config["env"]["discrete_all_sprite_mover"]) else 9)
     print(config["encoder_decoder"]["in_channels"])
-    config["dynamics"]["discrete_actions"] =  True
-
-    encoder_decoder = hydra.utils.instantiate(config["encoder_decoder"]).to(config["device"])#PatchVAE(**patch_vae).to(self.device)
-    encoder_decoder.load_state_dict(torch.load(config["encoder_decoder_path"],map_location=config["device"]))
+    config["dynamics"]["discrete_actions"] =  config["env"]["discrete_all_sprite_mover"]
+    config["dynamics"]["num_rewards"] =  3
+    config["encoder_decoder_path"] = trained_dynamics_conf["encoder_decoder_path"]
     
-    config["dynamics"] = trained_dynamics_conf["dynamics"]
+    encoder_decoder = hydra.utils.instantiate(config["encoder_decoder"]).to(device)#PatchVAE(**patch_vae).to(self.device)
+    encoder_decoder.load_state_dict(torch.load(config["encoder_decoder_path"],map_location=device))
+    
     config["dynamics"]["in_features"] = config["encoder_decoder"]["embed_dim"]
     config["dynamics"]["num_patches"] = encoder_decoder.num_patches
-    config["dynamics"]["num_actions"] = num_actions
-
     print(f"The encoder ouputs {encoder_decoder.num_patches} patches")
-    dynamics_model = hydra.utils.instantiate(config["dynamics"]).to(config["device"])
-    dynamics_model.load_state_dict(torch.load(config["dynamics_model_path"],map_location=config["device"]))
+    dynamics_model = hydra.utils.instantiate(config["dynamics"]).to(device)
+    dynamics_model.load_state_dict(torch.load(config["dynamics_model_path"],map_location=device))
     
     encoder_decoder.eval()
     dynamics_model.eval()
     return encoder_decoder, dynamics_model
+
     
 def make_mask_function(image,action,next_image,  encoder=None,dynamics=None, make_gt_mask=False,patch_size=16, num_sprites=4):
     
@@ -122,7 +139,7 @@ def make_mask_function(image,action,next_image,  encoder=None,dynamics=None, mak
         mask = make_gt_causal_mask(image, action, next_image, num_sprites=num_sprites,patch_size=patch_size[0])
     else:
         assert encoder is not None
-        mask = dynamics.get_causal_mask(image, action,encoder=encoder, discard_ratio=0.95,head_fusion=dynamics.head_fusion)
+        mask = dynamics.get_causal_mask(image.to(device)/255., action.to(device),encoder=encoder)[0].cpu() > dynamics.causal_mask_threshold
     return mask
 
 def make_reward_function(image, action, next_image, encoder=None,dynamics=None,make_gt_reward=False):    
@@ -137,8 +154,10 @@ def make_reward_function(image, action, next_image, encoder=None,dynamics=None,m
 def setup_dataset(config,env):
 
     if not config.dataset.use_gt_mask:
-        encoder_decoder, dynamics_model = setup_models_for_mask(config,num_actions= env.action_space._shape[0])
+        print("Loading models for mask")
+        encoder_decoder, dynamics_model = setup_models_for_mask(config)
     else:
+        print("Using GT mask")
         encoder_decoder = dynamics_model = None
 
     mask_function = lambda image, next_image, action: make_mask_function(image, next_image,action, encoder=encoder_decoder,dynamics=dynamics_model, make_gt_mask=config.dataset.use_gt_mask,patch_size=config.dataset.patch_size, num_sprites=config.env.num_sprites)
@@ -149,7 +168,7 @@ def setup_dataset(config,env):
     print("Creating CoDA data")
     coda_dataset = CodaDataset(dataset,max_coda_transitions=config.dataset.max_coda_transitions ,mask_function=mask_function,
                                 reward_function=reward_function, patch_size=config.dataset.patch_size,
-                                num_actions=env.action_space._shape[0],num_patches=config.dataset.num_patches)
+                                num_actions=env.action_space._shape[0],num_patches=config.dataset.num_patches,prioritize_object_count=config.dataset.prioritize_object_count)
     if config.dataset.save_coda_dataset:
         coda_data_path = f"{get_original_cwd()}/{config.coda_save_dataset_path}"
         coda_dataset.save(coda_data_path)
@@ -209,7 +228,7 @@ def main(config):
     run = wandb.init(project=f"batch_spriteworld", entity="gboeshertz", sync_tensorboard=True,
                      config=OmegaConf.to_container(config,resolve=True),settings=wandb.Settings(start_method="thread"))
     
-    wandb.run.name = f"{config.feature_extractor}_{wandb.run.name}"
+    wandb.run.name = f"real_{get_first_int(config.dataset_path)}_coda_{config.dataset.max_coda_transitions}_{wandb.run.name}"
     wandb.run.save()
     # prepare algorithm
     agent = d3rlpy.algos.IQL(use_gpu=torch.cuda.is_available(),

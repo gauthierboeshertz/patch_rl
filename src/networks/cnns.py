@@ -5,8 +5,15 @@ import torch.nn.functional as F
 import numpy as np
 
 
+def fixup_init(layer, num_layers):
+    nn.init.normal_(layer.weight, mean=0, std=np.sqrt(
+        2 / (layer.weight.shape[0] * np.prod(layer.weight.shape[2:]))) * num_layers ** (-0.25))
+
+def GroupNorm(in_channels: int,num_groups=32) -> nn.Module:
+    return torch.nn.GroupNorm(num_groups=num_groups, num_channels=in_channels, eps=1e-6, affine=True)
+
 class MLP(nn.Module):
-    def __init__(self, input_size, output_size,layer_sizes = [], activation=nn.ReLU):
+    def __init__(self, input_size, output_size,layer_sizes = [], activation=nn.ReLU,norm_type=None):
         super(MLP, self).__init__()
         self.input_size = input_size
         self.layer_sizes = layer_sizes
@@ -19,6 +26,10 @@ class MLP(nn.Module):
         else:
             self.layers.append(nn.Linear(input_size, layer_sizes[0]))
             for i in range(len(layer_sizes)-1):
+                if norm_type == "bn":
+                    self.layers.append(nn.BatchNorm1d(layer_sizes[i]))
+                if norm_type == "gn":
+                    self.layers.append(GroupNorm(layer_sizes[i],num_groups=16))
                 self.layers.append(self.activation())
                 self.layers.append(nn.Linear(layer_sizes[i], layer_sizes[i+1]))
             self.layers.append(self.activation())
@@ -29,9 +40,6 @@ class MLP(nn.Module):
     def forward(self, x):
         return self.layers(x)
 
-def fixup_init(layer, num_layers):
-    nn.init.normal_(layer.weight, mean=0, std=np.sqrt(
-        2 / (layer.weight.shape[0] * np.prod(layer.weight.shape[2:]))) * num_layers ** (-0.25))
 
 
 class InvertedResidual(nn.Module):
@@ -329,9 +337,6 @@ class PatchConv2dModel(torch.nn.Module):
         already: [B,C,H,W]."""
         
         return self.conv(input)
-
-def GroupNorm(in_channels: int) -> nn.Module:
-    return torch.nn.GroupNorm(num_groups=32, num_channels=in_channels, eps=1e-6, affine=True)
 
 class VAE_Encoder(nn.Module):
     

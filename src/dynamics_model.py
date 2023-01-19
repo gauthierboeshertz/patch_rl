@@ -19,6 +19,7 @@ def huber_loss(pred, target, delta=1e-3, reduction="mean"):
     return loss
 
 
+
 class ActionDiscretizer():
     def __init__(self,num_discrete_bins) -> None:
         self.num_discrete_bins = num_discrete_bins
@@ -34,8 +35,8 @@ class ActionDiscretizer():
         disc_actions = bucket_actions_x * self.num_discrete_bins + bucket_actions_y
         return disc_actions
        #torch.stack([torch.bucketize(actions[:,i]) for i in range(self.num_actions)],dim=1)
-        
-    
+
+
 
 class ObsActionEmbedding(nn.Module):
     def __init__(self, num_actions,action_dim, patchdes_dim,emb_dim, group_actions=True,
@@ -80,7 +81,6 @@ class ObsActionEmbedding(nn.Module):
         
         
         inputs = torch.zeros(patches.shape[0], patches.shape[1] + self.num_actions, self.emb_dim).to(patches.device)
-        
         emb_patches = self.obs_embedding(patches)
         inputs[:,:patches.shape[1]] = emb_patches
         
@@ -110,7 +110,7 @@ class AttentionDynamicsModel(nn.Module):
     def __init__(self, in_features, num_actions,action_dim=4,embed_dim=256, num_patches=16, num_attention_layers=2, mlp_dim=128, num_heads=2, dropout=0.,
                         group_actions=False,residual=True,discrete_actions=False,use_attn_mask=False,regularizer_weight=0.,device="cpu",
                         use_gt_mask=False,action_regularization_weight=0.1,temperature=1.,end_residual=False,head_disagreement_weight=0,causal_mask_threshold=0.2,
-                        head_fusion="max",discretize_actions=False,num_discrete_bins=16, predict_rewards=False,num_rewards=5, reward_loss_weight=0) -> None:
+                        head_fusion="max",discard_ratio=0.98,discretize_actions=False,num_discrete_bins=16, predict_rewards=False,num_rewards=5, reward_loss_weight=0) -> None:
         super(AttentionDynamicsModel, self).__init__()
 
 
@@ -123,6 +123,7 @@ class AttentionDynamicsModel(nn.Module):
         self.end_residual = end_residual
         self.causal_mask_threshold = causal_mask_threshold
         self.head_fusion = head_fusion
+        self.discard_ratio = discard_ratio
         # One additional dimension per action
         self.use_attn_mask = use_attn_mask
         self.residual = residual
@@ -173,7 +174,7 @@ class AttentionDynamicsModel(nn.Module):
             reward = None
         out = out[:,:patches.shape[1]]  # remove action embedding
         out = self.obs_head(out)
-        attention_weights = attention_weights[:,:,:, :inputs.shape[1]-1, :inputs.shape[1]-1]
+        attention_weights = attention_weights[:,:,:, :inputs.shape[1] -( 1 if self.predict_rewards else 0), :inputs.shape[1]-( 1 if self.predict_rewards else 0)]
         return out, reward, attention_weights
             
     
@@ -197,7 +198,7 @@ class AttentionDynamicsModel(nn.Module):
         return attention_weights
     
             
-    def get_causal_mask(self, images, actions,encoder=None, discard_ratio=0.8,head_fusion='mean'):
+    def get_causal_mask(self, images, actions,encoder=None):
         """
         get_causal_mask returns a causal mask from transitions.
 
@@ -212,7 +213,7 @@ class AttentionDynamicsModel(nn.Module):
         causal_masks = []
         
         for b in range(attn_weights.shape[0]):
-            causal_masks.append(attn_rollout(attn_weights[b], discard_ratio=discard_ratio,head_fusion=head_fusion,residual=self.residual))
+            causal_masks.append(attn_rollout(attn_weights[b], discard_ratio=self.discard_ratio,head_fusion=self.head_fusion,residual=self.residual))
         causal_masks = torch.stack(causal_masks)
         causal_masks[:,-self.action_embedding.num_actions:,:] = 0
         return causal_masks, attn_weights
@@ -273,8 +274,6 @@ class AttentionDynamicsModel(nn.Module):
         
         if self.predict_rewards:
             rewards = torch.stack(rewards, dim=1)
-            print(rewards.shape)
-            print(batch[2].to(self.device).long().shape)
             rewards = einops.rearrange(rewards, "b t n -> (b t) n")
             lab_rewards = einops.rearrange(batch[2][:,:-1].to(self.device).long(), "b t -> (b t)")
             rewards_loss = F.cross_entropy(rewards,lab_rewards)*self.reward_loss_weight

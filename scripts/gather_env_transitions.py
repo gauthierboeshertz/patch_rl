@@ -1,5 +1,4 @@
 import argparse
-
 from moog import environment
 from moog.env_wrappers import gym_wrapper
 from moog_demos.example_configs import bouncing_sprites
@@ -9,6 +8,9 @@ import numpy as np
 from gym import wrappers
 import hydra
 from stable_baselines3 import TD3
+import os
+import imageio
+
 
 def gather_env_transitions(env,num_transitions,trained_agent=None,num_action_repeat=1,data_name="data"):
     states, actions, rewards, next_states, dones = [],[],[],[],[]
@@ -17,17 +19,20 @@ def gather_env_transitions(env,num_transitions,trained_agent=None,num_action_rep
     
     action = env.action_space.sample()
     action_rep = 0
-    ep_reward = 0
+    ep_reward = 0.0
     for _ in tqdm(range(num_transitions)):
         
         if trained_agent is  None:
             if action_rep == num_action_repeat:
                 action = env.action_space.sample() # Should keep the action for some timestep?
+                possible_actions = np.array([-1,1])
+                action = np.random.choice(possible_actions,size=action.shape,replace=True).astype(np.float32)
+                action = np.clip(action + np.random.normal(0,0.2,size=action.shape).astype(np.float32), env.action_space.low+0.00001, env.action_space.high-0.00001)
                 action_rep = 0
             else:
                 action_rep += 1
         else:
-            action = trained_agent.predict(state)[0][0]
+            action = trained_agent.predict(state)[0][0].astype(np.float32)
             action = np.clip(action + np.random.normal(0,0.2,size=action.shape).astype(np.float32), env.action_space.low+0.00001, env.action_space.high-0.00001)
             
         next_state, reward, done, _ = env.step(action)
@@ -40,16 +45,18 @@ def gather_env_transitions(env,num_transitions,trained_agent=None,num_action_rep
         state = next_state
         if done:
             print("Episode reward",ep_reward)
-            ep_reward = 0
+            ep_reward = 0.0
             state = env.reset()
     
     print("Cutoff reward",ep_reward)
     states = np.array(states)
-    actions = np.array(actions)
+    print("States shape",states.shape)
+    #imageio.mimsave('movie.gif', [state[0] for state in states])
+
+    actions = np.array(actions,dtype=np.float32)
     next_states = np.array(next_states)
-    rewards = np.array(rewards)
+    rewards = np.array(rewards,dtype=np.float32)
     dones = np.array(dones)
-        
     print("States shape",states.shape)
     np.savez_compressed(data_name,states=states,actions=actions,rewards=rewards,next_states=next_states,dones=dones)
 
@@ -87,14 +94,16 @@ def main(config):
     if config["visual_obs"]:
         num_stack = 3 if not (config["instant_move"] or config["discrete_all_sprite_mover"]) else 1
         gym_env = wrappers.FrameStack(gym_env,num_stack)
-    data_name = "../data/{}_{}_{}transitions_{}_{}_{}_{}{}{}".format("expert" if trained_agent_path else "","visual" if config["visual_obs"] else "states",num_transitions,config["num_sprites"],("all_sprite_mover"if config["all_sprite_mover"] else "one_sprite_mover" if config["one_sprite_mover"] else "discrete_all_sprite_mover" if config["discrete_all_sprite_mover"] else "select_move"),config["random_init_places"],num_action_repeat,"instantmove" if config["instant_move"] else "", "no_targets"if config["dont_show_targets"] else "")
-    print("Data name",data_name)
     
-    if trained_agent_path:
+    if os.path.isfile(trained_agent_path):
+        print("Loading trained agent")
         agent = TD3.load(trained_agent_path)
     else:
+        print("Random agent")
         agent = None #random agent
-        
+    data_name = "../data/{}{}_{}transitions_{}_{}_{}_{}{}{}".format("expert_" if agent is not None else "","visual" if config["visual_obs"] else "states",num_transitions,config["num_sprites"],("all_sprite_mover"if config["all_sprite_mover"] else "one_sprite_mover" if config["one_sprite_mover"] else "discrete_all_sprite_mover" if config["discrete_all_sprite_mover"] else "select_move"),config["random_init_places"],num_action_repeat,"instantmove" if config["instant_move"] else "", "no_targets"if config["dont_show_targets"] else "")
+    print("Data name",data_name)
+
     gather_env_transitions(gym_env,num_transitions,
                             num_action_repeat=num_action_repeat,
                             data_name=data_name, trained_agent=agent)

@@ -17,6 +17,7 @@ from hydra.utils import get_original_cwd, to_absolute_path
 from collections import defaultdict
 import einops
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 logger = logging.getLogger(__name__)
 
 def train_epoch(model, optimizer, dataloader):
@@ -66,10 +67,8 @@ def train(model, optimizer, train_dataloader, val_dataloader, num_epochs,schedul
     for epoch in range(num_epochs):
         train_loss, train_loss_dict = train_epoch(model,optimizer, train_dataloader)
         val_loss, val_loss_dict = val_epoch(model,val_dataloader)        
-        
         scheduler.step()
-         
-        short_epoch_info = "Epoch: {},  train Loss: {}, Val Loss: {}".format(epoch,train_loss,val_loss )   
+        short_epoch_info = "Epoch: {},  train Loss: {}, Val Loss: {}".format(epoch,train_loss,val_loss)   
         
         epoch_info = f"Epoch: {epoch}, TRAIN: "
         for k in train_loss_dict:
@@ -93,8 +92,7 @@ def setup_model(config,num_actions):
     config["encoder_decoder"]["in_channels"] = (3 if (config["env"]["instant_move"] or config["env"]["discrete_all_sprite_mover"]) else 9)
     print(config["encoder_decoder"]["in_channels"])
 
-    encoder_decoder = hydra.utils.instantiate(config["encoder_decoder"]).to(config["device"])#PatchVAE(**patch_vae).to(self.device)
-    
+    encoder_decoder = hydra.utils.instantiate(config["encoder_decoder"]).to(device)#PatchVAE(**patch_vae).to(self.device)
     
     config["inverse"]["encoder"]["in_channels"] = (config["encoder_decoder"]["embed_dim"] * 2) * (config["encoder_decoder"]["categorical_dim"] if "cat" in config["encoder_decoder"]["name"].lower()  else 1)
     config["inverse"]["mlp"]["input_size"] = config["inverse"]["encoder"]["channels"][-1]*encoder_decoder.num_patches
@@ -103,12 +101,12 @@ def setup_model(config,num_actions):
     config["inverse"]["discrete_action_space"] = config["env"]["discrete_all_sprite_mover"]
     
     print(config["inverse"])
-    inverse_model = hydra.utils.instantiate(config["inverse"]).to(config["device"])
+    inverse_model = hydra.utils.instantiate(config["inverse"]).to(device)
     
     model = PatchModel(encoder_decoder=encoder_decoder,inverse=inverse_model,
                        vae_loss_weight=config["loss_weights"]["vae_loss_weight"],
                        inverse_loss_weight=config["loss_weights"]["inverse_loss_weight"],
-                       device=config["device"])
+                       device=device)
     return model
 
 @hydra.main(config_path="configs", config_name="train_patch_model")
@@ -118,7 +116,7 @@ def main(config):
     
     data_path = "{}/data/visual_{}transitions_{}_{}_{}_{}{}{}.npz".format(get_original_cwd(),config["env"]["num_transitions"],config["env"]["num_sprites"],("all_sprite_mover"if config["env"]["all_sprite_mover"] else "one_sprite_mover" if config["env"]["one_sprite_mover"] else  "discrete_all_sprite_mover" if config["env"]["discrete_all_sprite_mover"] else "select_move"),config["env"]["random_init_places"],config["env"]["num_action_repeat"],("instantmove" if config["env"]["instant_move"] else ""), ("no_targets" if config["env"]["dont_show_targets"] else ""))
     dataset = SequenceImageTransitionDataset(data_path=data_path,onehot_action=False,sequence_length=2)#config["env"]["discrete_all_sprite_mover"])
-    num_actions = dataset[0][1].shape[1]
+    num_actions = dataset.actions.shape[1]
     model = setup_model(config,num_actions)
     
     train_dataset, val_dataset = torch.utils.data.random_split(dataset, [int(len(dataset)*0.8), len(dataset)-int(len(dataset)*0.8)])
@@ -126,6 +124,7 @@ def main(config):
     train_dataloader = DataLoader(train_dataset,batch_size=config["train_loop"]["batch_size"],shuffle=True,num_workers=config["train_loop"]["num_workers"])
     val_dataloader = DataLoader(val_dataset,batch_size=config["train_loop"]["batch_size"],shuffle=False,num_workers=config["train_loop"]["num_workers"])
     
+    print("Starting Training")
     params_for_optim = model.get_trainable_params()
     optim_list = []
     for k in params_for_optim:

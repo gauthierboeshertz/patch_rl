@@ -1,6 +1,6 @@
 _target_: src.dynamics_model.AttentionDynamicsModel
 num_heads: 4
-mlp_dim: 256
+mlp_dim: 32
 num_attention_layers: 1
 dropout: 0.2
 action_dim: 8
@@ -11,7 +11,7 @@ residual: True
 use_attn_mask: False
 discrete_actions: False
 num_actions: -1
-embed_dim: 1024
+embed_dim: 32
 device: cpu
 use_gt_mask: False
 regularizer_weight: 0
@@ -21,9 +21,7 @@ temperature: 0.2
 end_residual: False
 causal_mask_threshold: 0.3
 discretize_actions: True
-num_discrete_bins: 7
+num_discrete_bins: 8
 predict_rewards: False
 num_rewards: ???
 reward_loss_weight: 0.01
-head_fusion: max
-discard_ratio: 0.98

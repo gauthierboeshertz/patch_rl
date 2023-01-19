@@ -1,0 +1,9 @@
+name: mlppatch_cvae
+_target_: src.small_patch_cvae.MLPPatchVAE
+patch_size: 4
+in_channels: 3
+embed_dim: 10
+channels: [32,32,16] #[64,64,128,256]
+categorical_dim: 2
+norm_type: null
+kld_weight: 0.0001
