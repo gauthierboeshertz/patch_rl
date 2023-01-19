@@ -4,7 +4,7 @@ import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from gym.spaces import Box
 import einops
-from networks.cnns import Conv2dModel
+from .networks.cnns import Conv2dModel
 
 class PatchVAEFeatureExtractor(BaseFeaturesExtractor):
     """
