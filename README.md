@@ -8,6 +8,8 @@ create environment with the yml file : `conda env create -f environment.yml`
 the env will be named urlb, so run `conda activate urlb` to activate the environment.
 
 ## Scripts:
+We use hydra, the configs are in the `configs` folder in scripts/. They have the same name as the scripts that use them.
+
 To run the betaVAE training on euler run:
 
 `sbatch  -n 4  --cpus-per-task=2  --gpus=1 --time=4:00:00    --mem-per-cpu=20G --wrap="python3 -u -m scripts.train_patch_model"`
